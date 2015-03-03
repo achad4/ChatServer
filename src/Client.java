@@ -48,8 +48,6 @@ public class Client {
     public void runClient(){
 
         try {
-
-
             sock = new Socket(address, portNumber);
             System.out.println(address);
             Scanner scan = new Scanner(System.in);
@@ -115,10 +113,10 @@ public class Client {
                     System.out.println(message+"\n");
                 } catch(IOException e) {
                     e.printStackTrace();
+                    break;
                 } catch(ClassNotFoundException e) {
                    e.printStackTrace();
                 }
-
             }
         }
     }

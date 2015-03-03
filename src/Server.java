@@ -2,6 +2,7 @@
  * Created by Avi on 2/22/15.
  */
 import java.io.*;
+import java.lang.Exception;
 import java.net.*;
 import java.util.ArrayList;
 
@@ -56,6 +57,13 @@ public class Server {
         return true;
     }
 
+    public synchronized void removeThread(long threadId){
+        for(UserThread t : this.clients){
+            if(t.getId() == threadId)
+                this.clients.remove(t);
+        }
+    }
+
     class UserThread extends Thread {
         Socket socket;
         ObjectInputStream in;
@@ -101,9 +109,18 @@ public class Server {
 
                 } catch (IOException e) {
                     e.printStackTrace();
+                    break;
                 } catch (ClassNotFoundException e) {
                     e.printStackTrace();
                 }
+            }
+            removeThread(this.getId());
+            try {
+                in.close();
+                out.close();
+                socket.close();
+            }catch (Exception e){
+                e.printStackTrace();
             }
         }
 
