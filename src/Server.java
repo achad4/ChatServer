@@ -48,10 +48,9 @@ public class Server {
         System.out.println("handling DM");
         for(UserThread t : this.clients){
             System.out.println(recipient.getUserName());
-            if(t.user == recipient){
+            if(t.user.getUserName().equals(recipient.getUserName())){
                 System.out.print("user:" + t.user.getUserName());
-                if(!t.writeMessage(text))
-                    return false;
+                return t.writeMessage(text);
             }
         }
         return true;
@@ -112,6 +111,7 @@ public class Server {
         //write a message to the user
         public Boolean writeMessage(String text){
             try {
+                System.out.println("sending DM");
                 this.out.writeObject(text);
                 return true;
             } catch (IOException e) {

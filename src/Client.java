@@ -49,11 +49,13 @@ public class Client {
 
         try {
 
+
             sock = new Socket(address, portNumber);
             System.out.println(address);
             Scanner scan = new Scanner(System.in);
             in = new ObjectInputStream(sock.getInputStream());
             out = new ObjectOutputStream(sock.getOutputStream());
+            new ClientThread().start();
             //new ClientThread().listen();
             System.out.print("Username: ");
             String username = scan.next();
