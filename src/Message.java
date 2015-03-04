@@ -4,7 +4,7 @@ import java.io.Serializable;
  */
 public class Message implements Serializable{
 
-    public final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2;
+    public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2;
     private int type;
     public String text;
     public User sender;

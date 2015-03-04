@@ -14,6 +14,8 @@ public class Server {
     public Server(int portNumber){
         this.portNumber = portNumber;
         this.clients = new ArrayList<UserThread>();
+        this.users = new ArrayList<User>();
+        populateUsers();
     }
 
     public void runServer(){
@@ -21,13 +23,12 @@ public class Server {
             ServerSocket serverSock = new ServerSocket(this.portNumber);
             for(;;){
                 Socket clientSock = serverSock.accept();
-                System.out.println("new thread");
                 //create a new thread to handle the user
                 UserThread thread = new UserThread(clientSock, this);
                 this.clients.add(thread);
                 thread.start();
-                System.out.println("user handled");
             }
+            /*
             try{
                 serverSock.close();
                 for(UserThread cThread : this.clients){
@@ -35,10 +36,11 @@ public class Server {
                     cThread.out.close();
                     cThread.socket.close();
                 }
+
             }catch (Exception e){
                 e.printStackTrace();
             }
-
+            */
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -82,6 +84,7 @@ public class Server {
     public User loginUser(String username, String password){
         for(User u : users){
             if(u.verifyPassword(password) && u.verifyUsername(username)) {
+                /*
                 for(UserThread t : this.clients){
                     if(t.user.getUserName().equals(u.getUserName())){
                         //user is already logged in
@@ -91,6 +94,7 @@ public class Server {
                         return null;
                     }
                 }
+                */
                 return u;
             }
         }
@@ -137,54 +141,64 @@ public class Server {
         }
 
         private User handleLogin(){
-            int attempts = 0;
-            while(this.user == null && attempts < 4) {
-                String username = (String) in.readObject();
-                String password = (String) in.readObject();
-                User u;
-                if((u = loginUser(username, password)) != null){
-                    return u;
+            try {
+                int attempts = 0;
+                while (this.user == null && attempts < 4) {
+                    String username = (String) in.readObject();
+                    String password = (String) in.readObject();
+                    User u;
+                    if ((u = loginUser(username, password)) != null) {
+                        return u;
+                    }
+                    out.writeObject("Invalid credentials.  Try again.");
+                    attempts++;
                 }
-                out.writeObject("Invalid credentials.  Try again.");
-                attempts++;
+                out.writeObject("Max attempts reached.  Timed out.");
+            } catch (IOException e){
+                e.printStackTrace();
             }
-            out.writeObject("Max attempts reached.  Timed out.");
+            catch (ClassNotFoundException e){
+                e.printStackTrace();
+            }
             return null;
         }
 
         public void run() {
-            Boolean handleClient = true;
-            while(handleClient){
-                try {
-                    if(this.user == null) {
-                        this.user = handleLogin();
+            try{
+                if(this.user == null) {
+                    if((this.user = handleLogin()) != null) {
+                        System.out.println("logged in");
+                        out.writeObject(true);
                     }
-                    else {
-                        //obtain the message object from the input stream
-                        Message message = (Message) in.readObject();
-                        switch (message.getType()) {
-                            case message.DIRECT_MESSAGE:
-                                this.handleDirectMessage(message);
-                                break;
-                            /*
-                            case message.BROADCAST:
-                                this.handleBroadcast(message);
-                                break;
-                             */
-                            case message.LOGOUT:
-                                this.logout();
-                                break;
-                        }
+                    else{
+                        out.writeObject(false);
+                    }
+                }
+                Boolean handleClient = true;
+                while(handleClient) {
+                    //obtain the message object from the input stream
+                    Message message = (Message) in.readObject();
+                    switch (message.getType()) {
+                        case Message.DIRECT_MESSAGE:
+                            this.handleDirectMessage(message);
+                            break;
+                        /*
+                        case message.BROADCAST:
+                            this.handleBroadcast(message);
+                            break;
+                         */
+                        case Message.LOGOUT:
+                            this.logout();
+                            break;
                     }
                     //make the user wait before attempting a fourth login
-                    sleep(6000);
+                }
                 } catch (IOException e) {
                     e.printStackTrace();
-                    break;
                 } catch (ClassNotFoundException e) {
                     e.printStackTrace();
                 }
-            }
+
             logout();
         }
 

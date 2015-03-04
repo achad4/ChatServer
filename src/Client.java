@@ -6,6 +6,7 @@ import java.net.*;
 import java.nio.Buffer;
 import java.util.ArrayList;
 import java.util.Scanner;
+import java.util.concurrent.locks.*;
 
 public class Client {
     public ObjectInputStream in;
@@ -13,14 +14,16 @@ public class Client {
     public int portNumber;
     public String address;
     public Socket sock;
-    public ArrayList<User> users;
-    private Boolean loggedIn;
+    //public ArrayList<User> users;
+    public Boolean loggedIn;
+    private User user;
+    public Lock aLock = new ReentrantLock();
+    public Condition condVar = aLock.newCondition();
 
     public Client(String address, int portNumber){
         this.portNumber = portNumber;
         this.address = address;
-        users = new ArrayList<User>();
-        this.populateUsers();
+        //users = new ArrayList<User>();
         this.loggedIn = false;
     }
 
@@ -33,42 +36,54 @@ public class Client {
         }
     }
 
-    publiv Boolean start(){
-        sock = new Socket(address, portNumber);
-        System.out.println(address);
-        Scanner scan = new Scanner(System.in);
-        in = new ObjectInputStream(sock.getInputStream());
-        out = new ObjectOutputStream(sock.getOutputStream());
-        new ClientThread().start();
-        while(!loggedIn){
-            System.out.print("Username: ");
-            String username = scan.next();
-            out.writeObject(username);
-            System.out.print("Password: ");
-            String password = scan.next();
-            out.writeObject(password);
+    public synchronized void setUp(){
+        try{
+            aLock.lock();
+            sock = new Socket(address, portNumber);
+            System.out.println(address);
+            Scanner scan = new Scanner(System.in);
+            in = new ObjectInputStream(sock.getInputStream());
+            out = new ObjectOutputStream(sock.getOutputStream());
+            new ClientThread(Thread.currentThread()).start();
+            while(!loggedIn){
+                System.out.print("Username: ");
+                String username = scan.next();
+                out.writeObject(username);
+                System.out.print("Password: ");
+                String password = scan.next();
+                out.writeObject(password);
+                try {
+                    System.out.println("waiting");
+                    condVar.await();
+                    System.out.println("past");
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            aLock.unlock();
         }
-
     }
 
     public void runClient(){
 
         try {
-            User user;
-            if((user = loginUser(username, password)) != null){
-                //send user to the server
-                out.writeObject(user);
-                //wait for commands from the user
-                for(;;){
-                    System.out.print(">");
-                    String command = scan.nextLine();
-                    Message message = new Message(command, user);
-                    if(message.parseMessage()){
-                        out.writeObject(message);
-                    }
-                    else {
-                        System.out.print(">Invalid command");
-                    }
+            setUp();
+            //send user to the server
+            //out.writeObject(user);
+            //wait for commands from the user
+            Scanner scan = new Scanner(System.in);
+            for(;;){
+                System.out.print(">");
+                String command = scan.nextLine();
+                Message message = new Message(command, user);
+                if(message.parseMessage()){
+                    out.writeObject(message);
+                }
+                else {
+                    System.out.print(">Invalid command");
                 }
             }
         }
@@ -81,17 +96,37 @@ public class Client {
     }
 
 
-    public void setLoggedIn(Boolean loggedIn){
-        this.loggedIn = loggedIn;
+    public void setLoggedInUser(User user){
+        this.loggedIn = true;
+        this.user = user;
     }
 
 
     class ClientThread extends Thread{
+        private Thread parent;
+        public ClientThread(Thread parent){
+            this.parent = parent;
+        }
         public void run(){
             for(;;){
                 try{
-                    String message = (String) in.readObject();
-                    System.out.println(message+"\n");
+                    Object object = in.readObject();
+                    if(object instanceof String){
+                        System.out.println(object+"\n");
+                    }
+                    else if(object instanceof Boolean){
+                        try {
+                            aLock.lock();
+                            loggedIn = (Boolean) object;
+                            synchronized (condVar) {
+                                System.out.println("notify");
+                                condVar.signalAll();
+                            }
+                        }finally {
+                            aLock.unlock();
+                        }
+                    }
+
                 } catch(IOException e) {
                     e.printStackTrace();
                     break;
