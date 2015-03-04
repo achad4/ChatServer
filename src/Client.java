@@ -14,25 +14,14 @@ public class Client {
     public String address;
     public Socket sock;
     public ArrayList<User> users;
+    private Boolean loggedIn;
 
     public Client(String address, int portNumber){
         this.portNumber = portNumber;
         this.address = address;
         users = new ArrayList<User>();
         this.populateUsers();
-    }
-
-    public void populateUsers(){
-        try {
-            BufferedReader br = new BufferedReader(new FileReader("credentials"));
-            String line;
-            while((line = br.readLine()) != null) {
-                String[] userInfo = line.split(",");
-                users.add(new User(userInfo[0], userInfo[1]));
-            }
-        }catch(IOException e){
-            e.printStackTrace();
-        }
+        this.loggedIn = false;
     }
 
     public void writeMessage(Message message){
@@ -44,21 +33,27 @@ public class Client {
         }
     }
 
+    publiv Boolean start(){
+        sock = new Socket(address, portNumber);
+        System.out.println(address);
+        Scanner scan = new Scanner(System.in);
+        in = new ObjectInputStream(sock.getInputStream());
+        out = new ObjectOutputStream(sock.getOutputStream());
+        new ClientThread().start();
+        while(!loggedIn){
+            System.out.print("Username: ");
+            String username = scan.next();
+            out.writeObject(username);
+            System.out.print("Password: ");
+            String password = scan.next();
+            out.writeObject(password);
+        }
+
+    }
 
     public void runClient(){
 
         try {
-            sock = new Socket(address, portNumber);
-            System.out.println(address);
-            Scanner scan = new Scanner(System.in);
-            in = new ObjectInputStream(sock.getInputStream());
-            out = new ObjectOutputStream(sock.getOutputStream());
-            new ClientThread().start();
-            //new ClientThread().listen();
-            System.out.print("Username: ");
-            String username = scan.next();
-            System.out.print("Password: ");
-            String password = scan.next();
             User user;
             if((user = loginUser(username, password)) != null){
                 //send user to the server
@@ -69,10 +64,6 @@ public class Client {
                     String command = scan.nextLine();
                     Message message = new Message(command, user);
                     if(message.parseMessage()){
-                        if(message.getType() == message.DIRECT_MESSAGE){
-                            String[] info = command.split(" ");
-                            message.setRecipient(findRecipient(info[1]));
-                        }
                         out.writeObject(message);
                     }
                     else {
@@ -88,22 +79,12 @@ public class Client {
         }
 
     }
-    private User findRecipient(String username){
-        for(User u : this.users){
-            if(u.getUserName().equals(username))
-                return u;
-        }
-        return null;
+
+
+    public void setLoggedIn(Boolean loggedIn){
+        this.loggedIn = loggedIn;
     }
 
-    public User loginUser(String username, String password){
-        for(User u : users){
-            if(u.verifyPassword(password) && u.verifyUsername(username))
-                return u;
-
-        }
-        return null;
-    }
 
     class ClientThread extends Thread{
         public void run(){
