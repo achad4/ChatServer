@@ -45,6 +45,10 @@ public class Message implements Serializable{
         return this.recipient;
     }
 
+    public User getSender(){
+        return this.sender;
+    }
+
     public String getText(){
         return this.text;
     }
@@ -54,6 +58,10 @@ public class Message implements Serializable{
     }
     public void setRecipient(User recipient){
         this.recipient = recipient;
+    }
+
+    public void setSender(User sender){
+        this.sender = sender;
     }
 }
 

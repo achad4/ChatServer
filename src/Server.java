@@ -5,17 +5,20 @@ import java.io.*;
 import java.lang.Exception;
 import java.net.*;
 import java.util.ArrayList;
+import java.util.LinkedList;
 
 public class Server {
     public int portNumber;
     private ArrayList<UserThread> clients;
     private ArrayList<User> users;
+    private LinkedList<Message> messageQueue;
     public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2;
 
     public Server(int portNumber){
         this.portNumber = portNumber;
         this.clients = new ArrayList<UserThread>();
         this.users = new ArrayList<User>();
+        this.messageQueue = new LinkedList<Message>();
         populateUsers();
     }
 
@@ -179,8 +182,16 @@ public class Server {
                 }
                 Boolean handleClient = true;
                 while(handleClient) {
+                    Message message;
+                    //obtain the message from the users pending message queue
+                    if(!messageQueue.isEmpty()){
+                        message = messageQueue.remove();
+                    }
                     //obtain the message object from the input stream
-                    Message message = (Message) in.readObject();
+                    else {
+                        message = (Message) in.readObject();
+                    }
+                    message.setSender(this.user);
                     switch (message.getType()) {
                         case Message.DIRECT_MESSAGE:
                             this.handleDirectMessage(message);
@@ -233,11 +244,15 @@ public class Server {
         //handle a message request to a user
         public void handleDirectMessage(Message message){
             String[] info = message.getCommand().split(" ");
-            message.setRecipient(findUser(info[1]));
-            writeDirectMessage(message.getText(), message.getRecipient());
+            User u;
+            if((u = findUser(info[1])) != null){
+                message.setRecipient(u);
+                String text = message.getSender().getUserName() + ": " + message.getText();
+                writeDirectMessage(text, message.getRecipient());
+            } else{ //user offline-- store for later
+                messageQueue.add(message);
+            }
         }
-
-
     }
 }
 
