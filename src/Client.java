@@ -15,7 +15,7 @@ public class Client {
     public String address;
     public Socket sock;
     //public ArrayList<User> users;
-    public Boolean loggedIn;
+    public Integer status;
     private User user;
     public Lock aLock = new ReentrantLock();
     public Condition condVar = aLock.newCondition();
@@ -24,7 +24,7 @@ public class Client {
         this.portNumber = portNumber;
         this.address = address;
         //users = new ArrayList<User>();
-        this.loggedIn = false;
+        this.status = 1;
     }
 
     public void writeMessage(Message message){
@@ -40,12 +40,11 @@ public class Client {
         try{
             aLock.lock();
             sock = new Socket(address, portNumber);
-            System.out.println(address);
             Scanner scan = new Scanner(System.in);
             in = new ObjectInputStream(sock.getInputStream());
             out = new ObjectOutputStream(sock.getOutputStream());
             new ClientThread(Thread.currentThread()).start();
-            while(!loggedIn){
+            while(status != Server.LOGGED_IN){
                 System.out.print("Username: ");
                 String username = scan.next();
                 out.writeObject(username);
@@ -53,11 +52,17 @@ public class Client {
                 String password = scan.next();
                 out.writeObject(password);
                 try {
-                    System.out.println("waiting");
                     condVar.await();
-                    System.out.println("past");
                 } catch (InterruptedException e) {
                     e.printStackTrace();
+                }
+                if(status == 2){
+                    System.out.println("Timed out for 60 seconds" + "\n");
+                    try{
+                        Thread.sleep(6000);
+                    }catch (InterruptedException e){
+                        e.printStackTrace();
+                    }
                 }
             }
         } catch (IOException e) {
@@ -71,8 +76,6 @@ public class Client {
 
         try {
             setUp();
-            //send user to the server
-            //out.writeObject(user);
             //wait for commands from the user
             Scanner scan = new Scanner(System.in);
             for(;;){
@@ -83,7 +86,7 @@ public class Client {
                     out.writeObject(message);
                 }
                 else {
-                    System.out.print(">Invalid command");
+                    System.out.print(">Invalid command"+"\n");
                 }
             }
         }
@@ -93,12 +96,6 @@ public class Client {
             e.printStackTrace();
         }
 
-    }
-
-
-    public void setLoggedInUser(User user){
-        this.loggedIn = true;
-        this.user = user;
     }
 
 
@@ -112,12 +109,12 @@ public class Client {
                 try{
                     Object object = in.readObject();
                     if(object instanceof String){
-                        System.out.println(object+"\n");
+                        System.out.println(object+"\n>");
                     }
-                    else if(object instanceof Boolean){
+                    else if(object instanceof Integer){
                         try {
                             aLock.lock();
-                            loggedIn = (Boolean) object;
+                            status = (Integer) object;
                             synchronized (condVar) {
                                 System.out.println("notify");
                                 condVar.signalAll();

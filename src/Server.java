@@ -10,6 +10,7 @@ public class Server {
     public int portNumber;
     private ArrayList<UserThread> clients;
     private ArrayList<User> users;
+    public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2;
 
     public Server(int portNumber){
         this.portNumber = portNumber;
@@ -63,11 +64,8 @@ public class Server {
 
     //search for the thread with the right user and send the text
     public synchronized Boolean writeDirectMessage(String text, User recipient){
-        System.out.println("handling DM");
         for(UserThread t : this.clients){
-            System.out.println(recipient.getUserName());
             if(t.user.getUserName().equals(recipient.getUserName())){
-                System.out.print("user:" + t.user.getUserName());
                 return t.writeMessage(text);
             }
         }
@@ -143,17 +141,23 @@ public class Server {
         private User handleLogin(){
             try {
                 int attempts = 0;
-                while (this.user == null && attempts < 4) {
+                while (this.user == null) {
                     String username = (String) in.readObject();
                     String password = (String) in.readObject();
                     User u;
                     if ((u = loginUser(username, password)) != null) {
                         return u;
                     }
-                    out.writeObject("Invalid credentials.  Try again.");
+                    if(attempts >= 2){
+                        out.writeObject(TIMED_OUT);
+                        attempts = 0;
+                    }
+                    else {
+                        out.writeObject(LOGGED_OUT);
+                    }
                     attempts++;
                 }
-                out.writeObject("Max attempts reached.  Timed out.");
+
             } catch (IOException e){
                 e.printStackTrace();
             }
@@ -167,8 +171,7 @@ public class Server {
             try{
                 if(this.user == null) {
                     if((this.user = handleLogin()) != null) {
-                        System.out.println("logged in");
-                        out.writeObject(true);
+                        out.writeObject(LOGGED_IN);
                     }
                     else{
                         out.writeObject(false);
@@ -219,7 +222,6 @@ public class Server {
         //write a message to the user
         public Boolean writeMessage(String text){
             try {
-                System.out.println("sending DM");
                 this.out.writeObject(text);
                 return true;
             } catch (IOException e) {
@@ -230,9 +232,9 @@ public class Server {
 
         //handle a message request to a user
         public void handleDirectMessage(Message message){
-            String[] info = message.text.split(" ");
+            String[] info = message.getCommand().split(" ");
             message.setRecipient(findUser(info[1]));
-            writeDirectMessage(message.text, message.getRecipient());
+            writeDirectMessage(message.getText(), message.getRecipient());
         }
 
 

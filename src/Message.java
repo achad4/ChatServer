@@ -6,19 +6,25 @@ public class Message implements Serializable{
 
     public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2;
     private int type;
-    public String text;
-    public User sender;
+    private String text;
+    private String command;
+    private User sender;
     private User recipient;
 
-    public Message(String text, User sender){
-        this.text = text;
+    public Message(String command, User sender){
+        this.command = command;
         this.sender = sender;
+        this.text = "";
     }
 
     public Boolean parseMessage(){
-        String[] info = this.text.split(" ");
+        String[] info = this.command.split(" ");
         if(info[0].equals("message")){
             this.type = DIRECT_MESSAGE;
+            //concatenate the body of the message to the text field
+            for(int i = 2; i < info.length; i++){
+                text += " " + info[i];
+            }
             return true;
         }
         else if(info[0].equals("broadcast")){
@@ -39,6 +45,13 @@ public class Message implements Serializable{
         return this.recipient;
     }
 
+    public String getText(){
+        return this.text;
+    }
+
+    public String getCommand(){
+        return this.command;
+    }
     public void setRecipient(User recipient){
         this.recipient = recipient;
     }
