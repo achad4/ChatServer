@@ -27,6 +27,7 @@ public class Server {
             ServerSocket serverSock = new ServerSocket(this.portNumber);
             for(;;){
                 Socket clientSock = serverSock.accept();
+                System.out.print("accepted");
                 //create a new thread to handle the user
                 UserThread thread = new UserThread(clientSock, this);
                 this.clients.add(thread);
@@ -112,21 +113,24 @@ public class Server {
 
     class UserThread extends Thread {
         Socket socket;
+        Socket clntSock;
         ObjectInputStream in;
-        ObjectOutputStream out;
+        //ObjectOutputStream out;
+        ObjectOutputStream toClnt;
         Server server;
         User user;
         //info the client passes to log in a user
         private String userName;
         private String password;
+        private Integer portNumber;
 
         public UserThread(Socket socket, Server server){
             this.socket = socket;
             //this.server = server;
             try {
-                this.out = new ObjectOutputStream(socket.getOutputStream());
+                //this.out = new ObjectOutputStream(socket.getOutputStream());
                 //flush output to unblock client side input stream
-                this.out.flush();
+                //this.out.flush();
                 this.in = new ObjectInputStream(socket.getInputStream());
 
                 //Message message = (Message) in.readObject();
@@ -141,8 +145,29 @@ public class Server {
             */
         }
 
+        private void connect(){
+            try {
+                clntSock = new Socket(Inet4Address.getLocalHost().getHostAddress(), portNumber);
+                toClnt = new ObjectOutputStream(clntSock.getOutputStream());
+                toClnt.flush();
+            }
+            catch (IOException e){
+                e.printStackTrace();
+            }
+        }
+
+        private void close(){
+            try{
+                toClnt.close();
+                clntSock.close();
+            }catch(IOException e){
+                e.printStackTrace();
+            }
+        }
+
         private User handleLogin(){
             try {
+                this.portNumber = (Integer) in.readObject();
                 int attempts = 0;
                 while (this.user == null) {
                     String username = (String) in.readObject();
@@ -152,11 +177,15 @@ public class Server {
                         return u;
                     }
                     if(attempts >= 2){
-                        out.writeObject(TIMED_OUT);
+                        connect();
+                        toClnt.writeObject(TIMED_OUT);
+                        close();
                         attempts = 0;
                     }
                     else {
-                        out.writeObject(LOGGED_OUT);
+                        connect();
+                        toClnt.writeObject(LOGGED_OUT);
+                        close();
                     }
                     attempts++;
                 }
@@ -174,17 +203,24 @@ public class Server {
             try{
                 if(this.user == null) {
                     if((this.user = handleLogin()) != null) {
-                        out.writeObject(LOGGED_IN);
+                        connect();
+                        toClnt.writeObject(LOGGED_IN);
                     }
                     else{
-                        out.writeObject(false);
+                        toClnt.writeObject(false);
                     }
                 }
-                Boolean handleClient = true;
-                while(handleClient) {
+            } catch (EOFException e) {
+                System.out.println("socket closed");
+            } catch (IOException e){
+                e.printStackTrace();
+            }
+            Boolean handleClient = true;
+            while(handleClient) {
+                try {
                     Message message;
                     //obtain the message from the users pending message queue
-                    if(!messageQueue.isEmpty()){
+                    if (!messageQueue.isEmpty()) {
                         message = messageQueue.remove();
                     }
                     //obtain the message object from the input stream
@@ -196,22 +232,25 @@ public class Server {
                         case Message.DIRECT_MESSAGE:
                             this.handleDirectMessage(message);
                             break;
-                        /*
-                        case message.BROADCAST:
-                            this.handleBroadcast(message);
-                            break;
-                         */
+                    /*
+                    case message.BROADCAST:
+                        this.handleBroadcast(message);
+                        break;
+                     */
                         case Message.LOGOUT:
                             this.logout();
                             break;
                     }
-                    //make the user wait before attempting a fourth login
-                }
-                } catch (IOException e) {
+                } catch (EOFException e){
+                    System.out.println("EOF");
+                    continue;
+                } catch (ClassNotFoundException e){
                     e.printStackTrace();
-                } catch (ClassNotFoundException e) {
+                } catch (IOException e){
                     e.printStackTrace();
                 }
+                //make the user wait before attempting a fourth login
+            }
 
             logout();
         }
@@ -223,7 +262,6 @@ public class Server {
             removeThread(this.getId());
             try {
                 in.close();
-                out.close();
                 socket.close();
             }catch (Exception e){
                 e.printStackTrace();
@@ -233,7 +271,7 @@ public class Server {
         //write a message to the user
         public Boolean writeMessage(String text){
             try {
-                this.out.writeObject(text);
+                toClnt.writeObject(text);
                 return true;
             } catch (IOException e) {
                 e.printStackTrace();

@@ -9,7 +9,7 @@ import java.util.Scanner;
 import java.util.concurrent.locks.*;
 
 public class Client {
-    public ObjectInputStream in;
+    //public ObjectInputStream in;
     public ObjectOutputStream out;
     public int portNumber;
     public String address;
@@ -36,14 +36,36 @@ public class Client {
         }
     }
 
+    //opens TCP connection
+    private void connect(){
+        try {
+            sock = new Socket(address, portNumber);
+            //in = new ObjectInputStream(sock.getInputStream());
+            out = new ObjectOutputStream(sock.getOutputStream());
+        }
+        catch (IOException e){
+            e.printStackTrace();
+        }
+    }
+
+    private void close(){
+        try{
+            //in.close();
+            out.close();
+            sock.close();
+        }catch(IOException e){
+            e.printStackTrace();
+        }
+    }
+
     public synchronized void setUp(){
         try{
             aLock.lock();
-            sock = new Socket(address, portNumber);
             Scanner scan = new Scanner(System.in);
-            in = new ObjectInputStream(sock.getInputStream());
-            out = new ObjectOutputStream(sock.getOutputStream());
-            new ClientThread(Thread.currentThread()).start();
+            ClientThread listenThread = new ClientThread();
+            listenThread.start();
+            System.out.print("here: " + listenThread.getPortNumber());
+            out.writeObject(listenThread.getPortNumber());
             while(status != Server.LOGGED_IN){
                 System.out.print("Username: ");
                 String username = scan.next();
@@ -65,6 +87,7 @@ public class Client {
                     }
                 }
             }
+            close();
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
@@ -75,7 +98,9 @@ public class Client {
     public void runClient(){
 
         try {
+            connect();
             setUp();
+            close();
             //wait for commands from the user
             Scanner scan = new Scanner(System.in);
             for(;;){
@@ -83,10 +108,12 @@ public class Client {
                 String command = scan.nextLine();
                 Message message = new Message(command, user);
                 if(message.parseMessage()){
+                    connect();
                     out.writeObject(message);
+                    close();
                 }
                 else {
-                    System.out.print(">Invalid command"+"\n");
+                    System.out.print(">Invalid command"+"\n>");
                 }
             }
         }
@@ -100,13 +127,21 @@ public class Client {
 
 
     class ClientThread extends Thread{
-        private Thread parent;
-        public ClientThread(Thread parent){
-            this.parent = parent;
+        private ServerSocket servSock;
+        private ObjectInputStream in;
+        public ClientThread(){
+            try {
+                servSock = new ServerSocket(0);
+            }catch(IOException e){
+                e.printStackTrace();
+            }
         }
+
         public void run(){
-            for(;;){
-                try{
+            try{
+                for(;;){
+                    Socket clntSock = servSock.accept();
+                    in = new ObjectInputStream(clntSock.getInputStream());
                     Object object = in.readObject();
                     if(object instanceof String){
                         System.out.println(object+"\n>");
@@ -116,21 +151,22 @@ public class Client {
                             aLock.lock();
                             status = (Integer) object;
                             synchronized (condVar) {
-                                System.out.println("notify");
                                 condVar.signalAll();
                             }
                         }finally {
                             aLock.unlock();
                         }
                     }
-
-                } catch(IOException e) {
-                    e.printStackTrace();
-                    break;
-                } catch(ClassNotFoundException e) {
-                   e.printStackTrace();
                 }
+            } catch(IOException e) {
+                e.printStackTrace();
+            } catch(ClassNotFoundException e) {
+                e.printStackTrace();
             }
+        }
+
+        public int getPortNumber(){
+            return servSock.getLocalPort();
         }
     }
 }
