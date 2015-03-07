@@ -37,11 +37,14 @@ public class Client {
     }
 
     //opens TCP connection
-    private void connect(){
+    private void connect(int portNumber){
         try {
-            sock = new Socket(address, portNumber);
+            sock = new Socket(address, this.portNumber);
             //in = new ObjectInputStream(sock.getInputStream());
             out = new ObjectOutputStream(sock.getOutputStream());
+            System.out.println(portNumber);
+            out.writeObject(portNumber);
+            out.writeObject(this.user);
         }
         catch (IOException e){
             e.printStackTrace();
@@ -62,10 +65,6 @@ public class Client {
         try{
             aLock.lock();
             Scanner scan = new Scanner(System.in);
-            ClientThread listenThread = new ClientThread();
-            listenThread.start();
-            System.out.print("here: " + listenThread.getPortNumber());
-            out.writeObject(listenThread.getPortNumber());
             while(status != Server.LOGGED_IN){
                 System.out.print("Username: ");
                 String username = scan.next();
@@ -98,7 +97,9 @@ public class Client {
     public void runClient(){
 
         try {
-            connect();
+            ClientThread listenThread = new ClientThread();
+            listenThread.start();
+            connect(listenThread.getPortNumber());
             setUp();
             close();
             //wait for commands from the user
@@ -108,7 +109,7 @@ public class Client {
                 String command = scan.nextLine();
                 Message message = new Message(command, user);
                 if(message.parseMessage()){
-                    connect();
+                    connect(listenThread.getPortNumber());
                     out.writeObject(message);
                     close();
                 }
@@ -150,6 +151,18 @@ public class Client {
                         try {
                             aLock.lock();
                             status = (Integer) object;
+                            synchronized (condVar) {
+                                condVar.signalAll();
+                            }
+                        }finally {
+                            aLock.unlock();
+                        }
+                    }else if(object instanceof User){
+                        try {
+                            aLock.lock();
+                            System.out.println("logged in");
+                            status = Server.LOGGED_IN;
+                            user = (User) object;
                             synchronized (condVar) {
                                 condVar.signalAll();
                             }

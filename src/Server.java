@@ -5,20 +5,23 @@ import java.io.*;
 import java.lang.Exception;
 import java.net.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 
 public class Server {
     public int portNumber;
     private ArrayList<UserThread> clients;
     private ArrayList<User> users;
-    private LinkedList<Message> messageQueue;
+    private ArrayList<User> loggedInUsers;
+    private HashMap<User, LinkedList<Message>> messageQueues;
     public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2;
 
     public Server(int portNumber){
         this.portNumber = portNumber;
         this.clients = new ArrayList<UserThread>();
         this.users = new ArrayList<User>();
-        this.messageQueue = new LinkedList<Message>();
+        this.messageQueues = new HashMap<User, LinkedList<Message>>();
+        this.loggedInUsers = new ArrayList<User>();
         populateUsers();
     }
 
@@ -83,7 +86,7 @@ public class Server {
         }
     }
 
-    public User loginUser(String username, String password){
+    public synchronized User loginUser(String username, String password){
         for(User u : users){
             if(u.verifyPassword(password) && u.verifyUsername(username)) {
                 /*
@@ -103,12 +106,27 @@ public class Server {
         return null;
     }
 
-    private User findUser(String username){
+    private synchronized User findUser(String username){
         for(User u : this.users){
             if(u.getUserName().equals(username))
                 return u;
         }
         return null;
+    }
+
+    private synchronized void logoutUser(User user){
+        for(User u : this.loggedInUsers){
+            if(u == user)
+                this.loggedInUsers.remove(u);
+        }
+    }
+
+    private synchronized Boolean isLoggedIn(User user){
+        for(User u : this.loggedInUsers){
+            if(u == user)
+                return true;
+        }
+        return false;
     }
 
     class UserThread extends Thread {
@@ -147,6 +165,7 @@ public class Server {
 
         private void connect(){
             try {
+                System.out.println("Connecting to the client");
                 clntSock = new Socket(Inet4Address.getLocalHost().getHostAddress(), portNumber);
                 toClnt = new ObjectOutputStream(clntSock.getOutputStream());
                 toClnt.flush();
@@ -156,7 +175,7 @@ public class Server {
             }
         }
 
-        private void close(){
+        private void closeOut(){
             try{
                 toClnt.close();
                 clntSock.close();
@@ -167,7 +186,6 @@ public class Server {
 
         private User handleLogin(){
             try {
-                this.portNumber = (Integer) in.readObject();
                 int attempts = 0;
                 while (this.user == null) {
                     String username = (String) in.readObject();
@@ -179,13 +197,13 @@ public class Server {
                     if(attempts >= 2){
                         connect();
                         toClnt.writeObject(TIMED_OUT);
-                        close();
+                        closeOut();
                         attempts = 0;
                     }
                     else {
                         connect();
                         toClnt.writeObject(LOGGED_OUT);
-                        close();
+                        closeOut();
                     }
                     attempts++;
                 }
@@ -201,10 +219,18 @@ public class Server {
 
         public void run() {
             try{
-                if(this.user == null) {
+                System.out.println("running server thread");
+                this.portNumber = (Integer) in.readObject();
+                System.out.println(this.portNumber);
+                //first determine whether this is client is logged in
+                if((this.user = (User) in.readObject()) == null) {
                     if((this.user = handleLogin()) != null) {
                         connect();
-                        toClnt.writeObject(LOGGED_IN);
+                        System.out.println("logging in client");
+                        toClnt.writeObject(this.user);
+                        loggedInUsers.add(this.user);
+                        closeOut();
+                        return;
                     }
                     else{
                         toClnt.writeObject(false);
@@ -214,14 +240,16 @@ public class Server {
                 System.out.println("socket closed");
             } catch (IOException e){
                 e.printStackTrace();
+            } catch (ClassNotFoundException e){
+                e.printStackTrace();
             }
             Boolean handleClient = true;
             while(handleClient) {
                 try {
                     Message message;
                     //obtain the message from the users pending message queue
-                    if (!messageQueue.isEmpty()) {
-                        message = messageQueue.remove();
+                    if ((messageQueues.get(this.user) != null) && !messageQueues.get(this.user).isEmpty()) {
+                        message = messageQueues.get(this.user).remove();
                     }
                     //obtain the message object from the input stream
                     else {
@@ -238,27 +266,27 @@ public class Server {
                         break;
                      */
                         case Message.LOGOUT:
-                            this.logout();
+                            logoutUser(this.user);
+                            this.closeIn();
                             break;
                     }
                 } catch (EOFException e){
                     System.out.println("EOF");
-                    continue;
+                    break;
                 } catch (ClassNotFoundException e){
                     e.printStackTrace();
                 } catch (IOException e){
                     e.printStackTrace();
                 }
                 //make the user wait before attempting a fourth login
-            }
 
-            logout();
+            }
         }
 
 
 
         //close sockets and remove the thread from the client list
-        private void logout(){
+        private void closeIn(){
             removeThread(this.getId());
             try {
                 in.close();
@@ -271,7 +299,9 @@ public class Server {
         //write a message to the user
         public Boolean writeMessage(String text){
             try {
+                connect();
                 toClnt.writeObject(text);
+                closeOut();
                 return true;
             } catch (IOException e) {
                 e.printStackTrace();
@@ -286,9 +316,12 @@ public class Server {
             if((u = findUser(info[1])) != null){
                 message.setRecipient(u);
                 String text = message.getSender().getUserName() + ": " + message.getText();
-                writeDirectMessage(text, message.getRecipient());
-            } else{ //user offline-- store for later
-                messageQueue.add(message);
+                if(isLoggedIn(u)) {
+                    writeDirectMessage(text, message.getRecipient());
+                }else{ //user is offline, store for later
+                    LinkedList<Message> queue = messageQueues.get(u);
+                    queue.add(message);
+                }
             }
         }
     }
