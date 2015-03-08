@@ -4,28 +4,21 @@
 import java.io.*;
 import java.lang.Exception;
 import java.net.*;
-import java.util.ArrayList;
-import java.util.ConcurrentModificationException;
-import java.util.HashMap;
-import java.util.LinkedList;
+import java.util.*;
 
 public class Server {
     public int portNumber;
-    //private ArrayList<UserThread> clients;
     private ArrayList<User> users;
-    //private ArrayList<User> loggedInUsers;
 
-    private HashMap<User, UserSession> sessions;
+    private HashMap<String, UserSession> sessions;
     private HashMap<String, LinkedList<Message>> messageQueues;
     public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2;
 
     public Server(int portNumber){
         this.portNumber = portNumber;
-        //this.clients = new ArrayList<UserThread>();
         this.users = new ArrayList<User>();
         this.messageQueues = new HashMap<String, LinkedList<Message>>();
-        this.sessions = new HashMap<User, UserSession>();
-        //this.loggedInUsers = new ArrayList<User>();
+        this.sessions = new HashMap<String, UserSession>();
         populateUsers();
     }
 
@@ -151,23 +144,21 @@ public class Server {
         }
         public void run() {
             try{
-                System.out.println("running server thread");
                 this.portNumber = (Integer) in.readObject();
-                System.out.println(this.portNumber);
                 //first determine whether this is client is logged in
                 if((this.user = (User) in.readObject()) == null) {
                     UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
                     //check if the user is logged on with another IP address
                     if(sessions.get(user) != null){
-                        writeToClient("Another user is logging in with your credentials", sessions.get(user));
+                        writeToClient("Another user is logging in with your credentials", session);
                         writeToClient(LOGGED_OUT, sessions.get(user));
                         sessions.remove(user);
                     }
                     if((user = handleLogin(session)) != null) {
-                        System.out.println("logging in client");
-                        sessions.put(user, session);
-                        writeToClient(user, sessions.get(this.user));
+                        sessions.put(user.getUserName(), session);
+                        writeToClient(user, session);
                         handleMissedMessages();
+
                         //return;
                     }
                 }
@@ -195,6 +186,10 @@ public class Server {
 
                         case Message.LOGOUT:
                             handleLogout();
+                            handleClient = false;
+                            break;
+                        case Message.GET_ADDRESS:
+                            handlePrivateChat(message);
                             handleClient = false;
                             break;
                     }
@@ -274,6 +269,23 @@ public class Server {
             String text = message.getSender().getUserName() + ": " + message.getText();
             for(UserSession session : sessions.values()){
                 writeToClient(text, session);
+            }
+        }
+
+        private void handlePrivateChat(Message message) throws IOException{
+            String[] info = message.getCommand().split(" ");
+            User u;
+            if((u = findUser(info[1])) != null){
+                UserSession session;
+                if((session = sessions.get(u.getUserName())) != null){
+                    AbstractMap.SimpleEntry<String, UserSession> pair;
+                    pair = new AbstractMap.SimpleEntry<String, UserSession>(u.getUserName(), session);
+                    System.out.println(sessions.get(this.user.getUserName()).getiP());
+                    writeToClient(pair, sessions.get(this.user.getUserName()));
+                }
+                else{
+                    writeToClient("Not online", sessions.get(this.user.getUserName()));
+                }
             }
         }
     }

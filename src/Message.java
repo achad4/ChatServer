@@ -4,7 +4,7 @@ import java.io.Serializable;
  */
 public class Message implements Serializable{
 
-    public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2;
+    public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2, PRIVATE = 3, GET_ADDRESS = 4;
     private int type;
     private String text;
     private String command;
@@ -36,6 +36,17 @@ public class Message implements Serializable{
         }
         else if(info[0].equals("logout")){
             this.type = LOGOUT;
+            return true;
+        }
+        else if(info[0].equals("private")){
+            this.type = PRIVATE;
+            for(int i = 2; i < info.length; i++){
+                this.text += " " + info[i];
+            }
+            return true;
+        }
+        else if(info[0].equals("getaddress")){
+            this.type = GET_ADDRESS;
             return true;
         }
         return false;

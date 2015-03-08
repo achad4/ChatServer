@@ -4,7 +4,9 @@
 import java.io.*;
 import java.net.*;
 import java.nio.Buffer;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Scanner;
 import java.util.concurrent.locks.*;
 
@@ -13,16 +15,20 @@ public class Client {
     public ObjectOutputStream out;
     public int portNumber;
     public String address;
-    public Socket sock;
+    private Socket sock;
+    private Socket privSock;
+    private ObjectOutputStream privOut;
     //public ArrayList<User> users;
     public Integer status;
     private User user;
     public Lock aLock = new ReentrantLock();
     public Condition condVar = aLock.newCondition();
+    private HashMap<String, UserSession> sessions;
 
     public Client(String address, int portNumber){
         this.portNumber = portNumber;
         this.address = address;
+        this.sessions = new HashMap<String, UserSession>();
         //users = new ArrayList<User>();
         this.status = 1;
     }
@@ -94,6 +100,37 @@ public class Client {
         }
     }
 
+    public Boolean handlePrivateMessage(Message message) throws IOException{
+        String[] info = message.getCommand().split(" ");
+        UserSession session;
+        if((session = sessions.get(info[1])) != null){
+            privateMessage(message.getText(), session);
+            return true;
+        }
+        return false;
+    }
+
+    public void privateMessage(Object object, UserSession session) throws IOException{
+        connect(session.getiP(), session.getPortNumber());
+        privOut.writeObject(object);
+        closePrivSock();
+    }
+
+    private void connect(InetAddress add, int portNumber) throws IOException{
+        privSock = new Socket(add, portNumber);
+        privOut = new ObjectOutputStream(privSock.getOutputStream());
+        privOut.flush();
+    }
+
+    private void closePrivSock(){
+        try{
+            privOut.close();
+            privSock.close();
+        }catch(IOException e){
+            e.printStackTrace();
+        }
+    }
+
     public void runClient(){
 
         try {
@@ -110,6 +147,11 @@ public class Client {
                 String command = scan.nextLine();
                 Message message = new Message(command, user);
                 if(message.parseMessage()){
+                    if(message.getType() == Message.PRIVATE){
+                        if(!handlePrivateMessage(message))
+                            System.out.println("Message Failure");
+                        continue;
+                    }
                     connect(listenThread.getPortNumber());
                     out.writeObject(message);
                     close();
@@ -171,6 +213,10 @@ public class Client {
                         }finally {
                             aLock.unlock();
                         }
+                    }else if(object instanceof AbstractMap.SimpleEntry){
+                        AbstractMap.SimpleEntry<String, UserSession> pair;
+                        pair = (AbstractMap.SimpleEntry<String, UserSession>) object;
+                        sessions.put(pair.getKey(), pair.getValue());
                     }
                 }
             } catch(IOException e) {
