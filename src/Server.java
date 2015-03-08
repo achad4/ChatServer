@@ -95,16 +95,11 @@ public class Server {
             }
         }
 
-        private void connect(InetAddress add, int portNumber){
-            try {
-                System.out.println("Connecting to the client");
-                clntSock = new Socket(add, portNumber);
-                toClnt = new ObjectOutputStream(clntSock.getOutputStream());
-                toClnt.flush();
-            }
-            catch (IOException e){
-                e.printStackTrace();
-            }
+        private void connect(InetAddress add, int portNumber) throws IOException{
+            System.out.println("Connecting to the client");
+            clntSock = new Socket(add, portNumber);
+            toClnt = new ObjectOutputStream(clntSock.getOutputStream());
+            toClnt.flush();
         }
 
         private void closeOut(){
@@ -145,7 +140,7 @@ public class Server {
             return null;
         }
 
-        private void handleMissedMessages(){
+        private void handleMissedMessages() throws IOException{
             if((messageQueues.get(this.user.getUserName()) == null)){
                 return;
             }
@@ -166,7 +161,9 @@ public class Server {
                     UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
                     //check if the user is logged on with another IP address
                     if(sessions.get(user) != null){
-                        
+                        writeToClient("Another user is logging in with your credentials", sessions.get(user));
+                        writeToClient(LOGGED_OUT, sessions.get(user));
+                        sessions.remove(user);
                     }
                     if((user = handleLogin(session)) != null) {
                         System.out.println("logging in client");
@@ -217,7 +214,7 @@ public class Server {
             }
         }
 
-        private void handleLogout(){
+        private void handleLogout() throws IOException{
             //logoutUser(this.user);
             writeToClient(LOGGED_OUT, sessions.get(this.user));
             sessions.remove(this.user);
@@ -238,34 +235,37 @@ public class Server {
         }
 
         //write a message to the user
-        public Boolean writeToClient(Object object, UserSession session){
-            try {
-                connect(session.getiP(), session.getPortNumber());
-                toClnt.writeObject(object);
-                closeOut();
-                return true;
-            } catch (IOException e) {
-                e.printStackTrace();
-                return false;
-            }
+        public void writeToClient(Object object, UserSession session) throws IOException{
+            connect(session.getiP(), session.getPortNumber());
+            toClnt.writeObject(object);
+            closeOut();
         }
 
         //handle a message request to a user
-        public void handleDirectMessage(Message message){
+        public void handleDirectMessage(Message message) throws IOException{
             String[] info = message.getCommand().split(" ");
             User u;
             if((u = findUser(info[1])) != null){
                 message.setRecipient(u);
                 String text = message.getSender().getUserName() + ": " + message.getText();
                 UserSession session;
+
                 if((session = sessions.get(u)) != null) {
-                    writeToClient(text, session);
+                    System.out.println("ip: "+sessions.get(u).getiP());
+                    //if connection was lost unexpectedly, remove the session
+                    try{
+                        writeToClient(text, session);
+                    }catch(ConnectException e) {
+                        System.out.println("Lost connection to recipient");
+                        sessions.remove(u);
+                        handleDirectMessage(message);
+                    }
                 }else{ //user is offline, store for later
+                    System.out.println("queueing");
                     LinkedList<Message> queue;
                     if((queue = messageQueues.get(u.getUserName())) != null) {
                         queue.add(message);
                     }else{
-                        System.out.println("making new quee");
                         queue = new LinkedList<Message>();
                         queue.add(message);
                         messageQueues.put(u.getUserName(), queue);

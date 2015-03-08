@@ -118,6 +118,7 @@ public class Client {
                     System.out.print(">Invalid command"+"\n>");
                 }
             }
+
         }
         catch(UnknownHostException e) {
             e.printStackTrace();
