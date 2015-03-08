@@ -86,7 +86,7 @@ public class Client {
                     }
                 }
             }
-            close();
+            System.out.println("Welcome to the Message Center!");
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
@@ -104,7 +104,8 @@ public class Client {
             close();
             //wait for commands from the user
             Scanner scan = new Scanner(System.in);
-            for(;;){
+            while(status == Server.LOGGED_IN){
+                System.out.print(status);
                 System.out.print(">");
                 String command = scan.nextLine();
                 Message message = new Message(command, user);
@@ -145,11 +146,12 @@ public class Client {
                     in = new ObjectInputStream(clntSock.getInputStream());
                     Object object = in.readObject();
                     if(object instanceof String){
-                        System.out.println(object+"\n>");
+                        System.out.println(object);
                     }
                     else if(object instanceof Integer){
                         try {
                             aLock.lock();
+                            System.out.println("status changed");
                             status = (Integer) object;
                             synchronized (condVar) {
                                 condVar.signalAll();
@@ -160,7 +162,6 @@ public class Client {
                     }else if(object instanceof User){
                         try {
                             aLock.lock();
-                            System.out.println("logged in");
                             status = Server.LOGGED_IN;
                             user = (User) object;
                             synchronized (condVar) {
