@@ -23,12 +23,15 @@ public class Message implements Serializable{
             this.type = DIRECT_MESSAGE;
             //concatenate the body of the message to the text field
             for(int i = 2; i < info.length; i++){
-                text += " " + info[i];
+                this.text += " " + info[i];
             }
             return true;
         }
         else if(info[0].equals("broadcast")){
             this.type = BROADCAST;
+            for(int i = 1; i < info.length; i++){
+                this.text += " " + info[i];
+            }
             return true;
         }
         else if(info[0].equals("logout")){

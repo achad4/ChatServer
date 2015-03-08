@@ -96,7 +96,6 @@ public class Server {
         }
 
         private void connect(InetAddress add, int portNumber) throws IOException{
-            System.out.println("Connecting to the client");
             clntSock = new Socket(add, portNumber);
             toClnt = new ObjectOutputStream(clntSock.getOutputStream());
             toClnt.flush();
@@ -146,7 +145,6 @@ public class Server {
             }
             writeToClient("Missed Messages:", sessions.get(this.user));
             while (!messageQueues.get(this.user.getUserName()).isEmpty()) {
-                System.out.println("messagequeue");
                 Message message = messageQueues.get(this.user.getUserName()).remove();
                 this.handleDirectMessage(message);
             }
@@ -184,19 +182,17 @@ public class Server {
             while(handleClient) {
                 try {
                     Message message;
-                    //obtain the message from the users pending message queue
-                    //obtain the message object from the input stream
                     message = (Message) in.readObject();
                     message.setSender(this.user);
                     switch (message.getType()) {
                         case Message.DIRECT_MESSAGE:
                             this.handleDirectMessage(message);
                             break;
-                    /*
-                    case message.BROADCAST:
-                        this.handleBroadcast(message);
-                        break;
-                     */
+
+                        case Message.BROADCAST:
+                            handleBroadcast(message);
+                            break;
+
                         case Message.LOGOUT:
                             handleLogout();
                             handleClient = false;
@@ -242,7 +238,7 @@ public class Server {
         }
 
         //handle a message request to a user
-        public void handleDirectMessage(Message message) throws IOException{
+        private void handleDirectMessage(Message message) throws IOException{
             String[] info = message.getCommand().split(" ");
             User u;
             if((u = findUser(info[1])) != null){
@@ -261,7 +257,6 @@ public class Server {
                         handleDirectMessage(message);
                     }
                 }else{ //user is offline, store for later
-                    System.out.println("queueing");
                     LinkedList<Message> queue;
                     if((queue = messageQueues.get(u.getUserName())) != null) {
                         queue.add(message);
@@ -271,6 +266,14 @@ public class Server {
                         messageQueues.put(u.getUserName(), queue);
                     }
                 }
+            }
+        }
+
+        //sends message to all onling users
+        private void handleBroadcast(Message message) throws IOException{
+            String text = message.getSender().getUserName() + ": " + message.getText();
+            for(UserSession session : sessions.values()){
+                writeToClient(text, session);
             }
         }
     }
