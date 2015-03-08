@@ -4,7 +4,8 @@ import java.io.Serializable;
  */
 public class Message implements Serializable{
 
-    public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2, PRIVATE = 3, GET_ADDRESS = 4;
+    public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2, PRIVATE = 3, GET_ADDRESS = 4,
+                            BLOCK = 5, UNBLOCK = 6;
     private int type;
     private String text;
     private String command;
@@ -47,6 +48,14 @@ public class Message implements Serializable{
         }
         else if(info[0].equals("getaddress")){
             this.type = GET_ADDRESS;
+            return true;
+        }
+        else if(info[0].equals("block")){
+            this.type = BLOCK;
+            return true;
+        }
+        else if(info[0].equals("unblock")){
+            this.type = UNBLOCK;
             return true;
         }
         return false;

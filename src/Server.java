@@ -12,6 +12,7 @@ public class Server {
 
     private HashMap<String, UserSession> sessions;
     private HashMap<String, LinkedList<Message>> messageQueues;
+    private HashMap<String, LinkedList<String>> blackLists;
     public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2;
 
     public Server(int portNumber){
@@ -19,6 +20,7 @@ public class Server {
         this.users = new ArrayList<User>();
         this.messageQueues = new HashMap<String, LinkedList<Message>>();
         this.sessions = new HashMap<String, UserSession>();
+        this.blackLists = new HashMap<String, LinkedList<String>>();
         populateUsers();
     }
 
@@ -64,6 +66,15 @@ public class Server {
                 return u;
         }
         return null;
+    }
+
+    private Boolean canContact(User a, User b){
+        LinkedList<String> blockedList;
+        if((blockedList = blackLists.get(b.getUserName())) != null) {
+            if (blockedList.contains(a.getUserName()))
+                return false;
+        }
+        return true;
     }
 
     class UserThread extends Thread {
@@ -179,17 +190,23 @@ public class Server {
                         case Message.DIRECT_MESSAGE:
                             this.handleDirectMessage(message);
                             break;
-
                         case Message.BROADCAST:
                             handleBroadcast(message);
                             break;
-
                         case Message.LOGOUT:
                             handleLogout();
                             handleClient = false;
                             break;
                         case Message.GET_ADDRESS:
                             handlePrivateChat(message);
+                            handleClient = false;
+                            break;
+                        case Message.BLOCK:
+                            handleBlock(message);
+                            handleClient = false;
+                            break;
+                        case Message.UNBLOCK:
+                            handleUnblock(message);
                             handleClient = false;
                             break;
                     }
@@ -237,34 +254,40 @@ public class Server {
             String[] info = message.getCommand().split(" ");
             User u;
             if((u = findUser(info[1])) != null){
-                message.setRecipient(u);
-                String text = message.getSender().getUserName() + ": " + message.getText();
-                UserSession session;
+                if(canContact(this.user, u)) {
+                    System.out.println("heeererere");
+                    message.setRecipient(u);
+                    String text = message.getSender().getUserName() + ": " + message.getText();
+                    UserSession session;
 
-                if((session = sessions.get(u)) != null) {
-                    System.out.println("ip: "+sessions.get(u).getiP());
-                    //if connection was lost unexpectedly, remove the session
-                    try{
-                        writeToClient(text, session);
-                    }catch(ConnectException e) {
-                        System.out.println("Lost connection to recipient");
-                        sessions.remove(u);
-                        handleDirectMessage(message);
+                    if ((session = sessions.get(u.getUserName())) != null) {
+                        System.out.println("ip: " + sessions.get(u.getUserName()).getiP());
+                        //if connection was lost unexpectedly, remove the session
+                        try {
+                            writeToClient(text, session);
+                        } catch (ConnectException e) {
+                            System.out.println("Lost connection to recipient");
+                            sessions.remove(u.getUserName());
+                            handleDirectMessage(message);
+                        }
+                    } else { //user is offline, store for later
+                        LinkedList<Message> queue;
+                        if ((queue = messageQueues.get(u.getUserName())) != null) {
+                            queue.add(message);
+                        } else {
+                            queue = new LinkedList<Message>();
+                            queue.add(message);
+                            messageQueues.put(u.getUserName(), queue);
+                        }
                     }
-                }else{ //user is offline, store for later
-                    LinkedList<Message> queue;
-                    if((queue = messageQueues.get(u.getUserName())) != null) {
-                        queue.add(message);
-                    }else{
-                        queue = new LinkedList<Message>();
-                        queue.add(message);
-                        messageQueues.put(u.getUserName(), queue);
-                    }
+                }else{
+                    writeToClient("You cannot contact this user", sessions.get(this.user.getUserName()));
                 }
             }
         }
 
         //sends message to all onling users
+        //TODO: add users to UserSession so that they don't recieve unwanted broadcasts
         private void handleBroadcast(Message message) throws IOException{
             String text = message.getSender().getUserName() + ": " + message.getText();
             for(UserSession session : sessions.values()){
@@ -276,53 +299,44 @@ public class Server {
             String[] info = message.getCommand().split(" ");
             User u;
             if((u = findUser(info[1])) != null){
-                UserSession session;
-                if((session = sessions.get(u.getUserName())) != null){
-                    AbstractMap.SimpleEntry<String, UserSession> pair;
-                    pair = new AbstractMap.SimpleEntry<String, UserSession>(u.getUserName(), session);
-                    System.out.println(sessions.get(this.user.getUserName()).getiP());
-                    writeToClient(pair, sessions.get(this.user.getUserName()));
+                if(canContact(this.user, u)) {
+                    UserSession session;
+                    if ((session = sessions.get(u.getUserName())) != null) {
+                        AbstractMap.SimpleEntry<String, UserSession> pair;
+                        pair = new AbstractMap.SimpleEntry<String, UserSession>(u.getUserName(), session);
+                        System.out.println(sessions.get(this.user.getUserName()).getiP());
+                        writeToClient(pair, sessions.get(this.user.getUserName()));
+                    } else {
+                        writeToClient("Not online", sessions.get(this.user.getUserName()));
+                    }
+                }else{
+                    writeToClient("You cannot contact this user", sessions.get(this.user.getUserName()));
                 }
-                else{
-                    writeToClient("Not online", sessions.get(this.user.getUserName()));
+            }
+        }
+
+        private void handleBlock(Message message){
+            String[] info = message.getCommand().split(" ");
+            User u;
+            if((u = findUser(info[1])) != null){
+                LinkedList<String> blockedList;
+                if((blockedList = blackLists.get(this.user)) != null) {
+                    blockedList.add(u.getUserName());
+                }else{
+                    System.out.println("blocking");
+                    blockedList = new LinkedList<String>();
+                    blockedList.add(u.getUserName());
                 }
+            }
+        }
+
+        private void handleUnblock(Message message){
+            String[] info = message.getCommand().split(" ");
+            User u;
+            if((u = findUser(info[1])) != null){
+                LinkedList<String> blockedList = blackLists.get(this.user);
+                blockedList.remove(u.getUserName());
             }
         }
     }
 }
-
-    /*
-    //search for the thread with the right user and send the text
-    public synchronized Boolean writeDirectMessage(String text, User recipient){
-        for (UserThread t : this.clients) {
-            if (t.user.getUserName().equals(recipient.getUserName())) {
-                return t.writeToClient(text);
-            }
-        }
-        return true;
-    }
-
-    public void removeThread(long threadId){
-        for (UserThread t : this.clients) {
-            if (t.getId() == threadId)
-                this.clients.remove(t);
-        }
-    }
-    */
-
-    /*
-    private synchronized void logoutUser(User user){
-        for(User u : this.loggedInUsers){
-            if(u == user)
-                this.loggedInUsers.remove(u);
-        }
-    }
-
-    private synchronized Boolean isLoggedIn(User user){
-        for(User u : this.loggedInUsers){
-            if(u == user)
-                return true;
-        }
-        return false;
-    }
-    */
