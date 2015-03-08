@@ -164,6 +164,10 @@ public class Server {
                 //first determine whether this is client is logged in
                 if((this.user = (User) in.readObject()) == null) {
                     UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
+                    //check if the user is logged on with another IP address
+                    if(sessions.get(user) != null){
+                        
+                    }
                     if((user = handleLogin(session)) != null) {
                         System.out.println("logging in client");
                         sessions.put(user, session);
