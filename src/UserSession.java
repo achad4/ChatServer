@@ -11,8 +11,7 @@ public class UserSession implements Serializable{
     private int portNumber;
     private Date lastHeartBeat;
 
-    public UserSession(User user, InetAddress iP, int portNumber){
-        this.user = user;
+    public UserSession(InetAddress iP, int portNumber){
         this.iP = iP;
         this.portNumber = portNumber;
         setLastHeartBeat();

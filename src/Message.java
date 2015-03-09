@@ -5,7 +5,7 @@ import java.io.Serializable;
 public class Message implements Serializable{
 
     public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2, PRIVATE = 3, GET_ADDRESS = 4,
-                            BLOCK = 5, UNBLOCK = 6;
+                            BLOCK = 5, UNBLOCK = 6, HEART_BEAT = 7;
     private int type;
     private String text;
     private String command;
@@ -16,6 +16,10 @@ public class Message implements Serializable{
         this.command = command;
         this.sender = sender;
         this.text = "";
+    }
+
+    public Message(){
+        this.type = HEART_BEAT;
     }
 
     public Boolean parseMessage(){

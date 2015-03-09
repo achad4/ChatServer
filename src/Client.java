@@ -4,16 +4,15 @@
 import java.io.*;
 import java.net.*;
 import java.nio.Buffer;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Scanner;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.*;
 
 public class Client {
     //public ObjectInputStream in;
     public ObjectOutputStream out;
-    public int portNumber;
+    private int portNumber;
+    private int listenPortNumber;
     public String address;
     private Socket sock;
     private Socket privSock;
@@ -43,13 +42,11 @@ public class Client {
     }
 
     //opens TCP connection
-    private void connect(int portNumber){
+    private void connect(){
         try {
             sock = new Socket(address, this.portNumber);
-            //in = new ObjectInputStream(sock.getInputStream());
             out = new ObjectOutputStream(sock.getOutputStream());
-            System.out.println(portNumber);
-            out.writeObject(portNumber);
+            out.writeObject(listenPortNumber);
             out.writeObject(this.user);
         }
         catch (IOException e){
@@ -92,6 +89,7 @@ public class Client {
                     }
                 }
             }
+            new HeartBeat().start();
             System.out.println("Welcome to the Message Center!");
         } catch (IOException e) {
             e.printStackTrace();
@@ -136,7 +134,8 @@ public class Client {
         try {
             ClientThread listenThread = new ClientThread();
             listenThread.start();
-            connect(listenThread.getPortNumber());
+            listenPortNumber = listenThread.getPortNumber();
+            connect();
             setUp();
             close();
             //wait for commands from the user
@@ -152,7 +151,7 @@ public class Client {
                             System.out.println("Message Failure");
                         continue;
                     }
-                    connect(listenThread.getPortNumber());
+                    connect();
                     out.writeObject(message);
                     close();
                 }
@@ -228,6 +227,32 @@ public class Client {
 
         public int getPortNumber(){
             return servSock.getLocalPort();
+        }
+    }
+
+    class HeartBeat extends Thread{
+        class Pump extends TimerTask {
+            public void run(){
+                try {
+                    Message heartBeat = new Message();
+                    connect();
+                    out.writeObject(heartBeat);
+                    close();
+                }catch (IOException e){
+                    e.printStackTrace();
+                }
+            }
+
+            public long getDiff(Date date1, Date date2, TimeUnit timeUnit){
+                long diff = date2.getTime() - date1.getTime();
+                return timeUnit.convert(diff,TimeUnit.MILLISECONDS);
+            }
+        }
+
+        public void run(){
+            //send heart beat every 30 seconds
+            Timer timer = new Timer();
+            timer.schedule(new Pump(), 0, 15000);
         }
     }
 }

@@ -79,33 +79,8 @@ public class Server {
         return true;
     }
 
-    class ClientMonitor extends Thread{
-        //object to timeout expired clients
-        class HeartBeat extends TimerTask{
-            public void run(){
-                for(UserSession session : sessions.values()){
-                    long diff = getDiff(session.getLastHeartBeat(), new Date(), TimeUnit.SECONDS);
-                    if(diff > 30){
-                        System.out.println("timed out");
-                    }
-                }
-            }
 
-            public long getDiff(Date date1, Date date2, TimeUnit timeUnit){
-                System.out.println(date2.getTime());
-                System.out.println(date1.getTime());
-                long diff = date2.getTime() - date1.getTime();
-                return timeUnit.convert(diff,TimeUnit.MILLISECONDS);
-            }
-        }
-
-        public void run(){
-            //run heart beat monitor every 5 seconds
-            Timer timer = new Timer();
-            timer.schedule(new HeartBeat(), 0, 5000);
-        }
-    }
-
+    //thread to handle general user requests
     class UserThread extends Thread {
         Socket socket;
         Socket clntSock;
@@ -187,19 +162,27 @@ public class Server {
                 this.portNumber = (Integer) in.readObject();
                 //first determine whether this is client is logged in
                 if((this.user = (User) in.readObject()) == null) {
-                    UserSession session = new UserSession(this.user, socket.getInetAddress(), this.portNumber);
+                    System.out.println("login");
+                    UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
                     //check if the user is logged on with another IP address
-                    if(sessions.get(user) != null){
-                        writeToClient("Another user is logging in with your credentials", session);
-                        writeToClient(LOGGED_OUT, sessions.get(user));
-                        sessions.remove(user);
-                    }
                     if((user = handleLogin(session)) != null) {
+                        if((sessions.get(user.getUserName())) != null){
+                            writeToClient("Another user is logging in with your credentials", session);
+                            writeToClient(LOGGED_OUT, session);
+                            sessions.remove(user.getUserName());
+                        }
+                        else {
+                            session.setUser(user);
+                            sessions.put(user.getUserName(), session);
+                            writeToClient(user, session);
+                            handleMissedMessages();
+                        }
+                    }
+                }else{ //check if the user has been timed out erroneously
+                    if((sessions.get(user.getUserName())) == null){
+                        UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
+                        session.setUser(user);
                         sessions.put(user.getUserName(), session);
-                        writeToClient(user, session);
-                        handleMissedMessages();
-
-                        //return;
                     }
                 }
             } catch (EOFException e) {
@@ -209,8 +192,8 @@ public class Server {
             } catch (ClassNotFoundException e){
                 e.printStackTrace();
             }
-            Boolean handleClient = true;
-            while(handleClient) {
+            //Boolean handleClient = true;
+            //while(handleClient) {
                 try {
                     Message message;
                     message = (Message) in.readObject();
@@ -224,31 +207,34 @@ public class Server {
                             break;
                         case Message.LOGOUT:
                             handleLogout();
-                            handleClient = false;
+                            //handleClient = false;
                             break;
                         case Message.GET_ADDRESS:
                             handlePrivateChat(message);
-                            handleClient = false;
+                            //handleClient = false;
                             break;
                         case Message.BLOCK:
                             handleBlock(message);
-                            handleClient = false;
+                            //handleClient = false;
                             break;
                         case Message.UNBLOCK:
                             handleUnblock(message);
-                            handleClient = false;
+                            //handleClient = false;
+                            break;
+                        case Message.HEART_BEAT:
+                            handleHeartBeat();
                             break;
                     }
                 } catch (EOFException e){
                     System.out.println("EOF");
                     closeIn();
-                    handleClient = false;
+                    //handleClient = false;
                 } catch (ClassNotFoundException e){
                     e.printStackTrace();
                 } catch (IOException e){
                     e.printStackTrace();
                 }
-            }
+            //}
         }
 
         private void handleLogout() throws IOException{
@@ -284,11 +270,9 @@ public class Server {
             User u;
             if((u = findUser(info[1])) != null){
                 if(canContact(this.user, u)) {
-                    System.out.println("heeererere");
                     message.setRecipient(u);
                     String text = message.getSender().getUserName() + ": " + message.getText();
                     UserSession session;
-
                     if ((session = sessions.get(u.getUserName())) != null) {
                         System.out.println("ip: " + sessions.get(u.getUserName()).getiP());
                         //if connection was lost unexpectedly, remove the session
@@ -370,5 +354,43 @@ public class Server {
                 }
             }
         }
+
+        private void handleHeartBeat(){
+            UserSession session = sessions.get(this.user.getUserName());
+            session.setLastHeartBeat();
+        }
     }
+
+
+    //Thread to handle heart beat
+    class ClientMonitor extends Thread{
+        //object to timeout expired clients
+        Socket clntSock;
+        ObjectOutputStream toClnt;
+
+        class HeartBeatChecker extends TimerTask{
+            public void run(){
+                for(UserSession session : sessions.values()) {
+                    long diff = getDiff(session.getLastHeartBeat(), new Date(), TimeUnit.SECONDS);
+                    if (diff > 30) {
+                        User user = session.getUser();
+                        System.out.println("Timed out "+user.getUserName());
+                        sessions.remove(user.getUserName());
+                    }
+                }
+            }
+
+            public long getDiff(Date date1, Date date2, TimeUnit timeUnit){
+                long diff = date2.getTime() - date1.getTime();
+                return timeUnit.convert(diff,TimeUnit.MILLISECONDS);
+            }
+        }
+
+        public void run(){
+            //run heart beat monitor every 5 seconds
+            Timer timer = new Timer();
+            timer.schedule(new HeartBeatChecker(), 0, 5000);
+        }
+    }
+
 }
