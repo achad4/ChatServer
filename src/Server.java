@@ -71,6 +71,10 @@ public class Server {
     private Boolean canContact(User a, User b){
         LinkedList<String> blockedList;
         if((blockedList = blackLists.get(b.getUserName())) != null) {
+            System.out.println("list entered");
+            for(String name : blockedList){
+                System.out.println("blocked: "+name);
+            }
             if (blockedList.contains(a.getUserName()))
                 return false;
         }
@@ -310,6 +314,7 @@ public class Server {
                         writeToClient("Not online", sessions.get(this.user.getUserName()));
                     }
                 }else{
+                    System.out.println("can't contact");
                     writeToClient("You cannot contact this user", sessions.get(this.user.getUserName()));
                 }
             }
@@ -319,13 +324,14 @@ public class Server {
             String[] info = message.getCommand().split(" ");
             User u;
             if((u = findUser(info[1])) != null){
+                System.out.println("blocking user");
                 LinkedList<String> blockedList;
                 if((blockedList = blackLists.get(this.user)) != null) {
                     blockedList.add(u.getUserName());
                 }else{
-                    System.out.println("blocking");
                     blockedList = new LinkedList<String>();
                     blockedList.add(u.getUserName());
+                    blackLists.put(this.user.getUserName(), blockedList);
                 }
             }
         }
@@ -334,8 +340,10 @@ public class Server {
             String[] info = message.getCommand().split(" ");
             User u;
             if((u = findUser(info[1])) != null){
-                LinkedList<String> blockedList = blackLists.get(this.user);
-                blockedList.remove(u.getUserName());
+                LinkedList<String> blockedList;
+                if((blockedList = blackLists.get(this.user.getUserName())) != null) {
+                    blockedList.remove(u.getUserName());
+                }
             }
         }
     }
