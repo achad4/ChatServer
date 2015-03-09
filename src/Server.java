@@ -5,6 +5,7 @@ import java.io.*;
 import java.lang.Exception;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class Server {
     public int portNumber;
@@ -26,6 +27,7 @@ public class Server {
 
     public void runServer(){
         try {
+            new ClientMonitor().start();
             ServerSocket serverSock = new ServerSocket(this.portNumber);
             for(;;){
                 Socket clientSock = serverSock.accept();
@@ -71,14 +73,37 @@ public class Server {
     private Boolean canContact(User a, User b){
         LinkedList<String> blockedList;
         if((blockedList = blackLists.get(b.getUserName())) != null) {
-            System.out.println("list entered");
-            for(String name : blockedList){
-                System.out.println("blocked: "+name);
-            }
             if (blockedList.contains(a.getUserName()))
                 return false;
         }
         return true;
+    }
+
+    class ClientMonitor extends Thread{
+        //object to timeout expired clients
+        class HeartBeat extends TimerTask{
+            public void run(){
+                for(UserSession session : sessions.values()){
+                    long diff = getDiff(session.getLastHeartBeat(), new Date(), TimeUnit.SECONDS);
+                    if(diff > 30){
+                        System.out.println("timed out");
+                    }
+                }
+            }
+
+            public long getDiff(Date date1, Date date2, TimeUnit timeUnit){
+                System.out.println(date2.getTime());
+                System.out.println(date1.getTime());
+                long diff = date2.getTime() - date1.getTime();
+                return timeUnit.convert(diff,TimeUnit.MILLISECONDS);
+            }
+        }
+
+        public void run(){
+            //run heart beat monitor every 5 seconds
+            Timer timer = new Timer();
+            timer.schedule(new HeartBeat(), 0, 5000);
+        }
     }
 
     class UserThread extends Thread {
@@ -162,7 +187,7 @@ public class Server {
                 this.portNumber = (Integer) in.readObject();
                 //first determine whether this is client is logged in
                 if((this.user = (User) in.readObject()) == null) {
-                    UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
+                    UserSession session = new UserSession(this.user, socket.getInetAddress(), this.portNumber);
                     //check if the user is logged on with another IP address
                     if(sessions.get(user) != null){
                         writeToClient("Another user is logging in with your credentials", session);
@@ -291,11 +316,11 @@ public class Server {
         }
 
         //sends message to all onling users
-        //TODO: add users to UserSession so that they don't recieve unwanted broadcasts
         private void handleBroadcast(Message message) throws IOException{
             String text = message.getSender().getUserName() + ": " + message.getText();
             for(UserSession session : sessions.values()){
-                writeToClient(text, session);
+                if(canContact(this.user, session.getUser()))
+                    writeToClient(text, session);
             }
         }
 
@@ -324,7 +349,6 @@ public class Server {
             String[] info = message.getCommand().split(" ");
             User u;
             if((u = findUser(info[1])) != null){
-                System.out.println("blocking user");
                 LinkedList<String> blockedList;
                 if((blockedList = blackLists.get(this.user)) != null) {
                     blockedList.add(u.getUserName());
