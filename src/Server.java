@@ -171,17 +171,12 @@ public class Server {
                     UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
                     //check if the user is logged on with another IP address
                     if((user = handleLogin(session)) != null) {
-
                         if(user.isBlocked()){
                             writeToClient("Due to multiple login failures your account has been temporarily blocked.",
                                           session);
                             writeToClient(LOGGED_OUT, session);
                             return;
                         }
-
-                        //String notification = user.getUserName() + " has logged on";
-                        //Message broadCast = new Message(notification, Message.BROADCAST);
-                        //handleBroadcast(broadCast);
                         if((sessions.get(user.getUserName())) != null){
                             writeToClient("Another user is logging in with your credentials", session);
                             writeToClient(LOGGED_OUT, session);
@@ -195,6 +190,9 @@ public class Server {
                             writeToClient(user, session);
                             handleMissedMessages();
                         }
+                        String notification = user.getUserName() + " has logged on";
+                        Message broadCast = new Message(notification, Message.BROADCAST);
+                        handleBroadcast(broadCast);
                     }
                 }else{
                     //check if the user has been timed out erroneously
@@ -319,10 +317,18 @@ public class Server {
 
         //sends message to all onling users
         private void handleBroadcast(Message message) throws IOException{
-            String text = message.getSender().getUserName() + ": " + message.getText();
+            String text;
+            if(message.getSender() != null) {
+                text = message.getSender().getUserName() + ": " + message.getText();
+            }
+            else {
+                text = message.getText();
+            }
             for(UserSession session : sessions.values()){
-                if(canContact(this.user, session.getUser()))
+                if(canContact(this.user, session.getUser()) &&
+                        !session.getUser().getUserName().equals(this.user.getUserName())) {
                     writeToClient(text, session);
+                }
             }
         }
 
