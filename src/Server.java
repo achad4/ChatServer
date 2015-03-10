@@ -14,7 +14,7 @@ public class Server {
     private HashMap<String, UserSession> sessions;
     private HashMap<String, LinkedList<Message>> messageQueues;
     private HashMap<String, LinkedList<String>> blackLists;
-    public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2;
+    public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2, ATTEMPTING = 3, USERNAME_CORRECT = 4;
 
     public Server(int portNumber){
         this.portNumber = portNumber;
@@ -31,7 +31,7 @@ public class Server {
             ServerSocket serverSock = new ServerSocket(this.portNumber);
             for(;;){
                 Socket clientSock = serverSock.accept();
-                UserThread thread = new UserThread(clientSock, this);
+                UserThread thread = new UserThread(clientSock);
                 //this.clients.add(thread);
                 thread.start();
             }
@@ -79,22 +79,17 @@ public class Server {
         return true;
     }
 
-
     //thread to handle general user requests
     class UserThread extends Thread {
-        Socket socket;
-        Socket clntSock;
-        ObjectInputStream in;
-        //ObjectOutputStream out;
-        ObjectOutputStream toClnt;
-        Server server;
+        private Socket socket;
+        private Socket clntSock;
+        private ObjectInputStream in;
+        private ObjectOutputStream toClnt;
         User user;
         //info the client passes to log in a user
-        private String userName;
-        private String password;
         private Integer portNumber;
 
-        public UserThread(Socket socket, Server server){
+        public UserThread(Socket socket){
             this.socket = socket;
             try {
                 this.in = new ObjectInputStream(socket.getInputStream());
@@ -120,9 +115,18 @@ public class Server {
 
         private User handleLogin(UserSession session){
             try {
+                User tempUser = new User("","");
+                String username = "";
+                Boolean validUserName = false;
+                while(!validUserName){
+                    username = (String) in.readObject();
+                    if((tempUser = findUser(username)) != null){
+                        validUserName = true;
+                        writeToClient(USERNAME_CORRECT, session);
+                    }
+                }
                 int attempts = 0;
                 while (this.user == null) {
-                    String username = (String) in.readObject();
                     String password = (String) in.readObject();
                     User u;
                     if ((u = loginUser(username, password)) != null) {
@@ -130,10 +134,11 @@ public class Server {
                     }
                     if(attempts >= 2){
                         writeToClient(TIMED_OUT, session);
+                        tempUser.block();
                         attempts = 0;
                     }
                     else {
-                        writeToClient(LOGGED_OUT, session);
+                        writeToClient(ATTEMPTING, session);
                     }
                     attempts++;
                 }
@@ -151,7 +156,7 @@ public class Server {
             if((messageQueues.get(this.user.getUserName()) == null)){
                 return;
             }
-            writeToClient("Missed Messages:", sessions.get(this.user));
+            writeToClient("Missed Messages:", sessions.get(this.user.getUserName()));
             while (!messageQueues.get(this.user.getUserName()).isEmpty()) {
                 Message message = messageQueues.get(this.user.getUserName()).remove();
                 this.handleDirectMessage(message);
@@ -166,10 +171,23 @@ public class Server {
                     UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
                     //check if the user is logged on with another IP address
                     if((user = handleLogin(session)) != null) {
+
+                        if(user.isBlocked()){
+                            writeToClient("Due to multiple login failures your account has been temporarily blocked.",
+                                          session);
+                            writeToClient(LOGGED_OUT, session);
+                            return;
+                        }
+
+                        //String notification = user.getUserName() + " has logged on";
+                        //Message broadCast = new Message(notification, Message.BROADCAST);
+                        //handleBroadcast(broadCast);
                         if((sessions.get(user.getUserName())) != null){
                             writeToClient("Another user is logging in with your credentials", session);
                             writeToClient(LOGGED_OUT, session);
                             sessions.remove(user.getUserName());
+                            session.setUser(user);
+                            sessions.put(this.user.getUserName(), session);
                         }
                         else {
                             session.setUser(user);
@@ -178,7 +196,8 @@ public class Server {
                             handleMissedMessages();
                         }
                     }
-                }else{ //check if the user has been timed out erroneously
+                }else{
+                    //check if the user has been timed out erroneously
                     if((sessions.get(user.getUserName())) == null){
                         UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
                         session.setUser(user);
@@ -192,55 +211,54 @@ public class Server {
             } catch (ClassNotFoundException e){
                 e.printStackTrace();
             }
-            //Boolean handleClient = true;
-            //while(handleClient) {
-                try {
-                    Message message;
-                    message = (Message) in.readObject();
-                    message.setSender(this.user);
-                    switch (message.getType()) {
-                        case Message.DIRECT_MESSAGE:
-                            this.handleDirectMessage(message);
-                            break;
-                        case Message.BROADCAST:
-                            handleBroadcast(message);
-                            break;
-                        case Message.LOGOUT:
-                            handleLogout();
-                            //handleClient = false;
-                            break;
-                        case Message.GET_ADDRESS:
-                            handlePrivateChat(message);
-                            //handleClient = false;
-                            break;
-                        case Message.BLOCK:
-                            handleBlock(message);
-                            //handleClient = false;
-                            break;
-                        case Message.UNBLOCK:
-                            handleUnblock(message);
-                            //handleClient = false;
-                            break;
-                        case Message.HEART_BEAT:
-                            handleHeartBeat();
-                            break;
-                    }
-                } catch (EOFException e){
-                    System.out.println("EOF");
-                    closeIn();
-                    //handleClient = false;
-                } catch (ClassNotFoundException e){
-                    e.printStackTrace();
-                } catch (IOException e){
-                    e.printStackTrace();
+            try {
+                Message message;
+                message = (Message) in.readObject();
+                message.setSender(this.user);
+                switch (message.getType()) {
+                    case Message.DIRECT_MESSAGE:
+                        this.handleDirectMessage(message);
+                        break;
+                    case Message.BROADCAST:
+                        handleBroadcast(message);
+                        break;
+                    case Message.LOGOUT:
+                        handleLogout();
+                        //handleClient = false;
+                        break;
+                    case Message.GET_ADDRESS:
+                        handlePrivateChat(message);
+                        //handleClient = false;
+                        break;
+                    case Message.BLOCK:
+                        handleBlock(message);
+                        //handleClient = false;
+                        break;
+                    case Message.UNBLOCK:
+                        handleUnblock(message);
+                        //handleClient = false;
+                        break;
+                    case Message.HEART_BEAT:
+                        handleHeartBeat();
+                        break;
+                    case Message.ONLINE:
+                        handleOnline();
+                        break;
                 }
-            //}
+            } catch (EOFException e){
+                System.out.println("EOF");
+                closeIn();
+                //handleClient = false;
+            } catch (ClassNotFoundException e){
+                e.printStackTrace();
+            } catch (IOException e){
+                e.printStackTrace();
+            }
         }
 
         private void handleLogout() throws IOException{
-            //logoutUser(this.user);
-            writeToClient(LOGGED_OUT, sessions.get(this.user));
-            sessions.remove(this.user);
+            //writeToClient(LOGGED_OUT, sessions.get(this.user.getUserName()));
+            sessions.remove(this.user.getUserName());
             closeIn();
         }
 
@@ -274,7 +292,6 @@ public class Server {
                     String text = message.getSender().getUserName() + ": " + message.getText();
                     UserSession session;
                     if ((session = sessions.get(u.getUserName())) != null) {
-                        System.out.println("ip: " + sessions.get(u.getUserName()).getiP());
                         //if connection was lost unexpectedly, remove the session
                         try {
                             writeToClient(text, session);
@@ -284,6 +301,7 @@ public class Server {
                             handleDirectMessage(message);
                         }
                     } else { //user is offline, store for later
+                        writeToClient("User is offline: sent as offline message", sessions.get(this.user.getUserName()));
                         LinkedList<Message> queue;
                         if ((queue = messageQueues.get(u.getUserName())) != null) {
                             queue.add(message);
@@ -359,15 +377,21 @@ public class Server {
             UserSession session = sessions.get(this.user.getUserName());
             session.setLastHeartBeat();
         }
+
+        private void handleOnline() throws IOException{
+            UserSession currentSession = sessions.get(this.user.getUserName());
+            for(UserSession session : sessions.values()){
+                if(!this.user.getUserName().equals(session.getUser().getUserName()))
+                    writeToClient(session.getUser().getUserName(), currentSession);
+            }
+        }
     }
 
 
     //Thread to handle heart beat
     class ClientMonitor extends Thread{
-        //object to timeout expired clients
-        Socket clntSock;
-        ObjectOutputStream toClnt;
 
+        //object to timeout expired clients
         class HeartBeatChecker extends TimerTask{
             public void run(){
                 for(UserSession session : sessions.values()) {

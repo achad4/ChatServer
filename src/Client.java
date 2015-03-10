@@ -29,7 +29,7 @@ public class Client {
         this.address = address;
         this.sessions = new HashMap<String, UserSession>();
         //users = new ArrayList<User>();
-        this.status = 1;
+        this.status = Server.ATTEMPTING;
     }
 
     public void writeMessage(Message message){
@@ -65,37 +65,42 @@ public class Client {
     }
 
     public synchronized void setUp(){
-        try{
-            aLock.lock();
-            Scanner scan = new Scanner(System.in);
-            while(status != Server.LOGGED_IN){
-                System.out.print("Username: ");
-                String username = scan.next();
-                out.writeObject(username);
-                System.out.print("Password: ");
-                String password = scan.next();
-                out.writeObject(password);
-                try {
-                    condVar.await();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                if(status == 2){
-                    System.out.println("Timed out for 60 seconds" + "\n");
-                    try{
-                        Thread.sleep(6000);
-                    }catch (InterruptedException e){
+            try {
+                aLock.lock();
+                Scanner scan = new Scanner(System.in);
+                while (status == Server.ATTEMPTING) {
+                    System.out.print("Username: ");
+                    String username = scan.next();
+                    out.writeObject(username);
+
+                    try {
+                        condVar.await();
+                    } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
                 }
+
+                while (status != Server.LOGGED_IN) {
+                    System.out.print("Password: ");
+                    String password = scan.next();
+                    out.writeObject(password);
+                    if (status == Server.TIMED_OUT) {
+                        System.out.println("Timed out for 60 seconds" + "\n");
+                    }
+                    try {
+                        condVar.await();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }catch (IOException e){
+                e.printStackTrace();
+            }finally {
+                aLock.unlock();
             }
+
             new HeartBeat().start();
             System.out.println("Welcome to the Message Center!");
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            aLock.unlock();
-        }
     }
 
     public Boolean handlePrivateMessage(Message message) throws IOException{
@@ -141,7 +146,6 @@ public class Client {
             //wait for commands from the user
             Scanner scan = new Scanner(System.in);
             while(status == Server.LOGGED_IN){
-                System.out.print(status);
                 System.out.print(">");
                 String command = scan.nextLine();
                 Message message = new Message(command, user);
@@ -154,9 +158,13 @@ public class Client {
                     connect();
                     out.writeObject(message);
                     close();
+                    //restart the client on log off
+                    if(message.getType() == Message.LOGOUT)
+                        System.exit(0);
+
                 }
                 else {
-                    System.out.print(">Invalid command"+"\n>");
+                    System.out.print(">Invalid command"+"\n");
                 }
             }
 
@@ -188,13 +196,16 @@ public class Client {
                     in = new ObjectInputStream(clntSock.getInputStream());
                     Object object = in.readObject();
                     if(object instanceof String){
-                        System.out.println(object);
+                        System.out.print(object + "\n>");
                     }
                     else if(object instanceof Integer){
                         try {
                             aLock.lock();
-                            System.out.println("status changed");
                             status = (Integer) object;
+
+                            if (status == Server.LOGGED_OUT)
+                                System.exit(0);
+
                             synchronized (condVar) {
                                 condVar.signalAll();
                             }

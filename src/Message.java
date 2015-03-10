@@ -5,13 +5,15 @@ import java.io.Serializable;
 public class Message implements Serializable{
 
     public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2, PRIVATE = 3, GET_ADDRESS = 4,
-                            BLOCK = 5, UNBLOCK = 6, HEART_BEAT = 7;
+                            BLOCK = 5, UNBLOCK = 6, HEART_BEAT = 7, ONLINE = 8;
     private int type;
     private String text;
     private String command;
     private User sender;
     private User recipient;
 
+
+    //construct message from the client end
     public Message(String command, User sender){
         this.command = command;
         this.sender = sender;
@@ -20,6 +22,12 @@ public class Message implements Serializable{
 
     public Message(){
         this.type = HEART_BEAT;
+    }
+
+    //construct message from server end
+    public Message(String text, int type){
+        this.text = text;
+        this.type = type;
     }
 
     public Boolean parseMessage(){
@@ -60,6 +68,10 @@ public class Message implements Serializable{
         }
         else if(info[0].equals("unblock")){
             this.type = UNBLOCK;
+            return true;
+        }
+        else if(info[0].equals("online")){
+            this.type = ONLINE;
             return true;
         }
         return false;

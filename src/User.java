@@ -5,10 +5,12 @@ import java.io.Serializable;
 public class User implements Serializable{
     private String userName;
     private String password;
+    private Boolean blocked;
 
     public User(String userName, String password){
         this.userName = userName;
         this.password = password;
+        this.blocked = false;
     }
 
     public Boolean verifyUsername(String userName){
@@ -25,5 +27,21 @@ public class User implements Serializable{
 
     public String getUserName(){
         return this.userName;
+    }
+
+
+    //time the user out for 60 seconds
+    public void block(){
+        this.blocked = true;
+        try{
+            Thread.sleep(60000);
+        }catch (InterruptedException e){
+            e.printStackTrace();
+        }
+        this.blocked = false;
+    }
+
+    public Boolean isBlocked(){
+        return this.blocked;
     }
 }
