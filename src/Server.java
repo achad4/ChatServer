@@ -180,7 +180,6 @@ public class Server {
                 this.portNumber = (Integer) in.readObject();
                 //first determine whether this is client is logged in
                 if((this.user = (User) in.readObject()) == null) {
-                    System.out.println("login");
                     UserSession session = new UserSession(socket.getInetAddress(), this.portNumber);
                     //check if the user is logged on with another IP address
                     if((user = handleLogin(session)) != null) {
@@ -263,9 +262,7 @@ public class Server {
                         break;
                 }
             } catch (EOFException e){
-                System.out.println("EOF");
                 closeIn();
-                //handleClient = false;
             } catch (ClassNotFoundException e){
                 e.printStackTrace();
             } catch (IOException e){
@@ -361,7 +358,6 @@ public class Server {
                         if ((session = sessions.get(u.getUserName())) != null) {
                             AbstractMap.SimpleEntry<String, UserSession> pair;
                             pair = new AbstractMap.SimpleEntry<String, UserSession>(u.getUserName(), session);
-                            System.out.println(sessions.get(this.user.getUserName()).getiP());
                             writeToClient(pair, sessions.get(this.user.getUserName()));
                         } else {
                             writeToClient("Not online", sessions.get(this.user.getUserName()));
@@ -373,7 +369,6 @@ public class Server {
                                 "use the command \"friend <username>\"", sessions.get(u.getUserName()));
                     }
                 }else{
-                    System.out.println("can't contact");
                     writeToClient("You cannot contact this user", sessions.get(this.user.getUserName()));
                 }
             }
