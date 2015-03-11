@@ -1,5 +1,6 @@
 /**
- * Created by Avi on 2/23/15.
+ * Avi Chad-Friedman
+ * ajc2212
  */
 import java.io.*;
 import java.net.*;
@@ -17,12 +18,12 @@ public class Client {
     private Socket sock;
     private Socket privSock;
     private ObjectOutputStream privOut;
-    //public ArrayList<User> users;
     public Integer status;
     private User user;
     public Lock aLock = new ReentrantLock();
     public Condition condVar = aLock.newCondition();
     private HashMap<String, UserSession> sessions;
+    private static final int HEART_RATE = 30;
 
     public Client(String address, int portNumber){
         this.portNumber = portNumber;
@@ -92,7 +93,7 @@ public class Client {
             }
 
             new HeartBeat().start();
-            System.out.println("Welcome to the Message Center!");
+            System.out.println(">Welcome to the Message Center!");
     }
 
     public Boolean handlePrivateMessage(Message message) throws IOException{
@@ -276,9 +277,9 @@ public class Client {
         }
 
         public void run(){
-            //send heart beat every 30 seconds
+            //send heart beat every HEART_RATE seconds
             Timer timer = new Timer();
-            timer.schedule(new Pump(), 0, 15000);
+            timer.schedule(new Pump(), 0, 1000*HEART_RATE);
         }
     }
 }

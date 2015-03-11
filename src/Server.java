@@ -1,5 +1,6 @@
 /**
- * Created by Avi on 2/22/15.
+ * Avi Chad-Friedman
+ * ajc2212
  */
 import java.io.*;
 import java.lang.Exception;
@@ -16,6 +17,7 @@ public class Server {
     private HashMap<String, LinkedList<String>> blackLists;
     private HashMap<String, LinkedList<String>> privateLists;
     public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2, ATTEMPTING = 3, USERNAME_CORRECT = 4;
+    private static final int TIMEOUT = 45;
 
     public Server(int portNumber){
         this.portNumber = portNumber;
@@ -47,7 +49,7 @@ public class Server {
             BufferedReader br = new BufferedReader(new FileReader("credentials"));
             String line;
             while((line = br.readLine()) != null) {
-                String[] userInfo = line.split(",");
+                String[] userInfo = line.split(" ");
                 users.add(new User(userInfo[0], userInfo[1]));
             }
         }catch(IOException e){
@@ -465,7 +467,7 @@ public class Server {
             public void run(){
                 for(UserSession session : sessions.values()) {
                     long diff = getDiff(session.getLastHeartBeat(), new Date(), TimeUnit.SECONDS);
-                    if (diff > 30) {
+                    if (diff > TIMEOUT) {
                         User user = session.getUser();
                         System.out.println("Timed out "+user.getUserName());
                         sessions.remove(user.getUserName());
