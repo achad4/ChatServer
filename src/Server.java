@@ -138,7 +138,7 @@ public class Server {
                         writeToClient(USERNAME_CORRECT, session);
                     }
                 }
-                int attempts = 0;
+                int attempts = 1;
                 while (this.user == null) {
                     String password = (String) in.readObject();
                     User u;

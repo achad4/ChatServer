@@ -6,22 +6,21 @@ import java.io.*;
 import java.net.*;
 import java.nio.Buffer;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.*;
 
 public class Client {
-    //public ObjectInputStream in;
-    public ObjectOutputStream out;
+
+    private ObjectOutputStream out;
     private int portNumber;
     private int listenPortNumber;
-    public String address;
+    private String address;
     private Socket sock;
     private Socket privSock;
     private ObjectOutputStream privOut;
-    public Integer status;
+    private Integer status;
     private User user;
-    public Lock aLock = new ReentrantLock();
-    public Condition condVar = aLock.newCondition();
+    private Lock aLock = new ReentrantLock();
+    private Condition condVar = aLock.newCondition();
     private HashMap<String, UserSession> sessions;
     private static final int HEART_RATE = 30;
 
@@ -33,8 +32,7 @@ public class Client {
         this.status = Server.ATTEMPTING;
     }
 
-
-    //opens TCP connection
+    //connect to the server
     private void connect(){
         try {
             sock = new Socket(address, this.portNumber);
@@ -47,9 +45,9 @@ public class Client {
         }
     }
 
+    //close the connection to the server
     private void close(){
         try{
-            //in.close();
             out.close();
             sock.close();
         }catch(IOException e){
@@ -57,7 +55,24 @@ public class Client {
         }
     }
 
-    public synchronized void setUp(){
+    //Connect to another client without the server's help
+    private void connect(InetAddress add, int portNumber) throws IOException{
+        privSock = new Socket(add, portNumber);
+        privOut = new ObjectOutputStream(privSock.getOutputStream());
+        privOut.flush();
+    }
+
+    //close the connection to another client
+    private void closePrivSock(){
+        try{
+            privOut.close();
+            privSock.close();
+        }catch(IOException e){
+            e.printStackTrace();
+        }
+    }
+
+    public synchronized void login(){
             try {
                 aLock.lock();
                 Scanner scan = new Scanner(System.in);
@@ -72,7 +87,6 @@ public class Client {
                         e.printStackTrace();
                     }
                 }
-
                 while (status != Server.LOGGED_IN) {
                     System.out.print("Password: ");
                     String password = scan.next();
@@ -91,7 +105,6 @@ public class Client {
             }finally {
                 aLock.unlock();
             }
-
             new HeartBeat().start();
             System.out.println(">Welcome to the Message Center!");
     }
@@ -116,21 +129,6 @@ public class Client {
         }
     }
 
-    private void connect(InetAddress add, int portNumber) throws IOException{
-        privSock = new Socket(add, portNumber);
-        privOut = new ObjectOutputStream(privSock.getOutputStream());
-        privOut.flush();
-    }
-
-    private void closePrivSock(){
-        try{
-            privOut.close();
-            privSock.close();
-        }catch(IOException e){
-            e.printStackTrace();
-        }
-    }
-
     public void runClient(){
 
         try {
@@ -138,7 +136,7 @@ public class Client {
             listenThread.start();
             listenPortNumber = listenThread.getPortNumber();
             connect();
-            setUp();
+            login();
             close();
             //wait for commands from the user
             //Scanner scan = new Scanner(System.in);
@@ -186,6 +184,7 @@ public class Client {
     }
 
 
+    //Thread that listens for information from the server
     class ClientThread extends Thread{
         private ServerSocket servSock;
         private ObjectInputStream in;
@@ -239,7 +238,6 @@ public class Client {
                         Message message = (Message) object;
                         if(message.getType() == Message.UNFRIEND){
                             if((sessions.get(message.getSender().getUserName())) != null){
-                                System.out.println("removing session");
                                 sessions.remove(message.getSender().getUserName());
                             }
                         }
@@ -257,7 +255,9 @@ public class Client {
         }
     }
 
+    //Thread to let the server know the client is alive
     class HeartBeat extends Thread{
+
         class Pump extends TimerTask {
             public void run(){
                 try {
@@ -268,11 +268,6 @@ public class Client {
                 }catch (IOException e){
                     e.printStackTrace();
                 }
-            }
-
-            public long getDiff(Date date1, Date date2, TimeUnit timeUnit){
-                long diff = date2.getTime() - date1.getTime();
-                return timeUnit.convert(diff,TimeUnit.MILLISECONDS);
             }
         }
 
