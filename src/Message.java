@@ -1,8 +1,9 @@
-import java.io.Serializable;
 /**
  * Avi Chad-Friedman
  * ajc2212
+ * Message class to encapsulate information sent in various commands
  */
+import java.io.Serializable;
 public class Message implements Serializable{
 
     public static final int DIRECT_MESSAGE = 0, BROADCAST = 1, LOGOUT = 2, PRIVATE = 3, GET_ADDRESS = 4,
@@ -85,13 +86,10 @@ public class Message implements Serializable{
         }
         return false;
     }
-     public int getType(){
-         return this.type;
-     }
 
-    public User getRecipient(){
-        return this.recipient;
-    }
+    public int getType(){
+        return this.type;
+     }
 
     public User getSender(){
         return this.sender;
@@ -104,6 +102,7 @@ public class Message implements Serializable{
     public String getCommand(){
         return this.command;
     }
+
     public void setRecipient(User recipient){
         this.recipient = recipient;
     }

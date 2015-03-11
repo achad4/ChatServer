@@ -1,10 +1,12 @@
+/**
+ * Avi Chad-Friedman
+ * ajc2212
+ * UserSession class is used by the server to store state of clients
+ */
+
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.Date;
-
-/**
- * Created by Avi on 3/7/15.
- */
 public class UserSession implements Serializable{
     private User user;
     private InetAddress iP;
@@ -17,16 +19,8 @@ public class UserSession implements Serializable{
         setLastHeartBeat();
     }
 
-    public void setiP(InetAddress iP){
-        this.iP = iP;
-    }
-
     public InetAddress getiP(){
         return this.iP;
-    }
-
-    public void setPortNumber(int portNumber){
-        this.portNumber = portNumber;
     }
 
     public int getPortNumber(){

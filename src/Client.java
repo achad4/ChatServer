@@ -1,10 +1,10 @@
 /**
  * Avi Chad-Friedman
  * ajc2212
+ * Client class contains all the functionality of the client
  */
 import java.io.*;
 import java.net.*;
-import java.nio.Buffer;
 import java.util.*;
 import java.util.concurrent.locks.*;
 
@@ -195,7 +195,6 @@ public class Client {
             }
         }
 
-        //override
         public void run(){
             try{
                 for(;;){

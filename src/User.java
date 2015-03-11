@@ -1,5 +1,7 @@
 /**
- * Created by Avi on 2/22/15.
+ * Avi Chad-Friedman
+ * ajc2212
+ * User class represents a user with a username and password
  */
 import java.io.Serializable;
 public class User implements Serializable{

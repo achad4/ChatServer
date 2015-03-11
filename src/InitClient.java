@@ -1,6 +1,7 @@
 /**
  * Avi Chad-Friedman
  * ajc2212
+ * InitClient starts the Client
  */
 public class InitClient {
     public static void main(String[] args){

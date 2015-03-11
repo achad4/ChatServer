@@ -1,6 +1,7 @@
 /**
  * Avi Chad-Friedman
  * ajc2212
+ * InitServer starts the Server
  */
 public class InitServer {
     public static void main(String[] args){

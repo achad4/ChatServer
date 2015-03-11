@@ -1,9 +1,9 @@
 /**
  * Avi Chad-Friedman
  * ajc2212
+ * Server class accepts clients and manages all information relating the the chat program
  */
 import java.io.*;
-import java.lang.Exception;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +36,6 @@ public class Server {
             for(;;){
                 Socket clientSock = serverSock.accept();
                 UserThread thread = new UserThread(clientSock);
-                //this.clients.add(thread);
                 thread.start();
             }
         } catch (IOException e) {
