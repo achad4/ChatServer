@@ -139,7 +139,6 @@ public class Client {
             login();
             close();
             //wait for commands from the user
-            //Scanner scan = new Scanner(System.in);
             BufferedReader br = new BufferedReader(
                     new InputStreamReader(System.in));
             while(status == Server.LOGGED_IN){
@@ -196,6 +195,7 @@ public class Client {
             }
         }
 
+        //override
         public void run(){
             try{
                 for(;;){

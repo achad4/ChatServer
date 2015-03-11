@@ -11,6 +11,7 @@ CLASSES = \
 	InitClient.java \
 	Client.java \
 	Message.java \
+	UserSession.java \
 
 
 default: classes

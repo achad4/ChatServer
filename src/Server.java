@@ -126,6 +126,7 @@ public class Server {
             }
         }
 
+        //Handle the login using the established protocol
         private User handleLogin(UserSession session){
             try {
                 User tempUser = new User("","");
@@ -234,19 +235,15 @@ public class Server {
                         break;
                     case Message.LOGOUT:
                         handleLogout();
-                        //handleClient = false;
                         break;
                     case Message.GET_ADDRESS:
                         handlePrivateChat(message);
-                        //handleClient = false;
                         break;
                     case Message.BLOCK:
                         handleBlock(message);
-                        //handleClient = false;
                         break;
                     case Message.UNBLOCK:
                         handleUnblock(message);
-                        //handleClient = false;
                         break;
                     case Message.HEART_BEAT:
                         handleHeartBeat();
@@ -271,7 +268,6 @@ public class Server {
         }
 
         private void handleLogout() throws IOException{
-            //writeToClient(LOGGED_OUT, sessions.get(this.user.getUserName()));
             sessions.remove(this.user.getUserName());
             closeIn();
         }
