@@ -14,6 +14,7 @@ public class Server {
     private HashMap<String, UserSession> sessions;
     private HashMap<String, LinkedList<Message>> messageQueues;
     private HashMap<String, LinkedList<String>> blackLists;
+    private HashMap<String, LinkedList<String>> privateLists;
     public static final int LOGGED_IN = 0, LOGGED_OUT = 1, TIMED_OUT = 2, ATTEMPTING = 3, USERNAME_CORRECT = 4;
 
     public Server(int portNumber){
@@ -22,6 +23,7 @@ public class Server {
         this.messageQueues = new HashMap<String, LinkedList<Message>>();
         this.sessions = new HashMap<String, UserSession>();
         this.blackLists = new HashMap<String, LinkedList<String>>();
+        this.privateLists = new HashMap<String, LinkedList<String>>();
         populateUsers();
     }
 
@@ -77,6 +79,15 @@ public class Server {
                 return false;
         }
         return true;
+    }
+
+    private Boolean isFriend(User a, User b){
+        LinkedList<String> friends;
+        if((friends = privateLists.get(b.getUserName())) != null) {
+            if (friends.contains(a.getUserName()))
+                return true;
+        }
+        return false;
     }
 
     //thread to handle general user requests
@@ -242,6 +253,12 @@ public class Server {
                     case Message.ONLINE:
                         handleOnline();
                         break;
+                    case Message.FRIEND:
+                        handleFriend(message);
+                        break;
+                    case Message.UNFRIEND:
+                        handleUnfriend(message);
+                        break;
                 }
             } catch (EOFException e){
                 System.out.println("EOF");
@@ -337,18 +354,64 @@ public class Server {
             User u;
             if((u = findUser(info[1])) != null){
                 if(canContact(this.user, u)) {
-                    UserSession session;
-                    if ((session = sessions.get(u.getUserName())) != null) {
-                        AbstractMap.SimpleEntry<String, UserSession> pair;
-                        pair = new AbstractMap.SimpleEntry<String, UserSession>(u.getUserName(), session);
-                        System.out.println(sessions.get(this.user.getUserName()).getiP());
-                        writeToClient(pair, sessions.get(this.user.getUserName()));
-                    } else {
-                        writeToClient("Not online", sessions.get(this.user.getUserName()));
+                    if(isFriend(this.user, u)) {
+                        UserSession session;
+                        if ((session = sessions.get(u.getUserName())) != null) {
+                            AbstractMap.SimpleEntry<String, UserSession> pair;
+                            pair = new AbstractMap.SimpleEntry<String, UserSession>(u.getUserName(), session);
+                            System.out.println(sessions.get(this.user.getUserName()).getiP());
+                            writeToClient(pair, sessions.get(this.user.getUserName()));
+                        } else {
+                            writeToClient("Not online", sessions.get(this.user.getUserName()));
+                        }
+                    }else{
+                        writeToClient("Waiting for user's permission.  You'll be notified when you can contact " +
+                                u.getUserName(), sessions.get(this.user.getUserName()));
+                        writeToClient(this.user.getUserName() + " is requesting your IP address.  To allow P2P chat " +
+                                "use the command \"friend <username>\"", sessions.get(u.getUserName()));
                     }
                 }else{
                     System.out.println("can't contact");
                     writeToClient("You cannot contact this user", sessions.get(this.user.getUserName()));
+                }
+            }
+        }
+
+        private void handleFriend(Message message) throws IOException{
+            String[] info = message.getCommand().split(" ");
+            User u;
+            if((u = findUser(info[1])) != null) {
+                UserSession session;
+                if ((session = sessions.get(this.user.getUserName())) != null) {
+                    AbstractMap.SimpleEntry<String, UserSession> pair;
+                    pair = new AbstractMap.SimpleEntry<String, UserSession>(this.user.getUserName(), session);
+                    writeToClient(pair, sessions.get(u.getUserName()));
+                    writeToClient("You can now chat privately with "+this.user.getUserName(), sessions.get(u.getUserName()));
+                } else {
+                    writeToClient("Not online", sessions.get(this.user.getUserName()));
+                }
+                LinkedList<String> friends;
+                if((friends = privateLists.get(this.user)) != null) {
+                    friends.add(u.getUserName());
+                }else{
+                    friends = new LinkedList<String>();
+                    friends.add(u.getUserName());
+                    privateLists.put(this.user.getUserName(), friends);
+                }
+            }
+        }
+
+        private void handleUnfriend(Message message) throws IOException{
+            message.setSender(this.user);
+            String[] info = message.getCommand().split(" ");
+            User u;
+            if((u = findUser(info[1])) != null){
+                LinkedList<String> friends;
+                if((friends = privateLists.get(this.user.getUserName())) != null) {
+                    friends.remove(u.getUserName());
+                    writeToClient(message, sessions.get(u.getUserName()));
+                    writeToClient("You can no longer privately chat with"+this.user.getUserName(),
+                            sessions.get(u.getUserName()));
                 }
             }
         }

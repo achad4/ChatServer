@@ -32,14 +32,6 @@ public class Client {
         this.status = Server.ATTEMPTING;
     }
 
-    public void writeMessage(Message message){
-        try {
-            out.writeObject(message);
-        }
-        catch(IOException e){
-            e.printStackTrace();
-        }
-    }
 
     //opens TCP connection
     private void connect(){
@@ -107,16 +99,20 @@ public class Client {
         String[] info = message.getCommand().split(" ");
         UserSession session;
         if((session = sessions.get(info[1])) != null){
-            privateMessage(message.getText(), session);
+            privateMessage(this.user.getUserName()+": "+message.getText(), session);
             return true;
         }
         return false;
     }
 
     public void privateMessage(Object object, UserSession session) throws IOException{
-        connect(session.getiP(), session.getPortNumber());
-        privOut.writeObject(object);
-        closePrivSock();
+        try {
+            connect(session.getiP(), session.getPortNumber());
+            privOut.writeObject(object);
+            closePrivSock();
+        }catch (ConnectException e){
+            System.out.println(">User's address may have changed.  Please request again.");
+        }
     }
 
     private void connect(InetAddress add, int portNumber) throws IOException{
@@ -144,15 +140,27 @@ public class Client {
             setUp();
             close();
             //wait for commands from the user
-            Scanner scan = new Scanner(System.in);
+            //Scanner scan = new Scanner(System.in);
+            BufferedReader br = new BufferedReader(
+                    new InputStreamReader(System.in));
             while(status == Server.LOGGED_IN){
                 System.out.print(">");
-                String command = scan.nextLine();
+                //String command = scan.nextLine();
+                String command = "";
+                try {
+                    // wait until we have data to complete a readLine()
+                    while (!br.ready()) {
+                        Thread.sleep(200);
+                    }
+                    command = br.readLine();
+                } catch (InterruptedException e) {
+                    System.out.println("ConsoleInputReadTask() cancelled");
+                }
                 Message message = new Message(command, user);
                 if(message.parseMessage()){
                     if(message.getType() == Message.PRIVATE){
                         if(!handlePrivateMessage(message))
-                            System.out.println("Message Failure");
+                            System.out.println(">You must request the user's address.");
                         continue;
                     }
                     connect();
@@ -167,7 +175,6 @@ public class Client {
                     System.out.print(">Invalid command"+"\n");
                 }
             }
-
         }
         catch(UnknownHostException e) {
             e.printStackTrace();
@@ -227,6 +234,14 @@ public class Client {
                         AbstractMap.SimpleEntry<String, UserSession> pair;
                         pair = (AbstractMap.SimpleEntry<String, UserSession>) object;
                         sessions.put(pair.getKey(), pair.getValue());
+                    }else if(object instanceof Message){
+                        Message message = (Message) object;
+                        if(message.getType() == Message.UNFRIEND){
+                            if((sessions.get(message.getSender().getUserName())) != null){
+                                System.out.println("removing session");
+                                sessions.remove(message.getSender().getUserName());
+                            }
+                        }
                     }
                 }
             } catch(IOException e) {
